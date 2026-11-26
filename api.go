@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -53,6 +54,7 @@ type track struct {
 	Artist    string    `json:"artist"`
 	AlbumName string    `json:"album_name"`
 	AlbumID   loose     `json:"album_id"`
+	PicURL    string    `json:"pic_url"`
 	Duration  loose     `json:"duration"`
 	Minfo     []quality `json:"minfo"`
 	Link      string    `json:"link"`
@@ -64,6 +66,7 @@ type collectionInfo struct {
 	ID     loose  `json:"id"`
 	Name   string `json:"name"`
 	Artist string `json:"artist"`
+	PicURL string `json:"pic_url"`
 	Link   string `json:"link"`
 }
 
@@ -83,7 +86,11 @@ func newClient() *client {
 }
 
 func (c *client) post(act string, params url.Values) (json.RawMessage, error) {
-	req, err := http.NewRequest(http.MethodPost, c.base+"?act="+url.QueryEscape(act), strings.NewReader(params.Encode()))
+	return c.postContext(context.Background(), act, params)
+}
+
+func (c *client) postContext(ctx context.Context, act string, params url.Values) (json.RawMessage, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+"?act="+url.QueryEscape(act), strings.NewReader(params.Encode()))
 	if err != nil {
 		return nil, err
 	}
@@ -117,29 +124,41 @@ func (c *client) post(act string, params url.Values) (json.RawMessage, error) {
 	return env.Data, nil
 }
 
+func (c *client) searchPage(platform, keyword string, page int) ([]track, int, error) {
+	return c.searchPageContext(context.Background(), platform, keyword, page)
+}
+
+func (c *client) searchPageContext(ctx context.Context, platform, keyword string, page int) ([]track, int, error) {
+	data, err := c.postContext(ctx, "search", url.Values{
+		"platform": {platform},
+		"keyword":  {keyword},
+		"page":     {strconv.Itoa(page)},
+		"size":     {strconv.Itoa(pageSize)},
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	var got struct {
+		List  []track `json:"list"`
+		Total int     `json:"total"`
+	}
+	if err := json.Unmarshal(data, &got); err != nil {
+		return nil, 0, fmt.Errorf("search: %w", err)
+	}
+	return got.List, got.Total, nil
+}
+
 func (c *client) search(platform, keyword string, limit int) ([]track, int, error) {
 	var out []track
 	total := 0
 	for page := 1; page <= maxPages; page++ {
-		data, err := c.post("search", url.Values{
-			"platform": {platform},
-			"keyword":  {keyword},
-			"page":     {strconv.Itoa(page)},
-			"size":     {strconv.Itoa(pageSize)},
-		})
+		list, gotTotal, err := c.searchPage(platform, keyword, page)
 		if err != nil {
 			return nil, 0, err
 		}
-		var got struct {
-			List  []track `json:"list"`
-			Total int     `json:"total"`
-		}
-		if err := json.Unmarshal(data, &got); err != nil {
-			return nil, 0, fmt.Errorf("search: %w", err)
-		}
-		total = got.Total
-		out = append(out, got.List...)
-		if len(got.List) < pageSize || (total > 0 && len(out) >= total) || len(out) >= limit {
+		total = gotTotal
+		out = append(out, list...)
+		if len(list) < pageSize || (total > 0 && len(out) >= total) || len(out) >= limit {
 			break
 		}
 	}
@@ -152,9 +171,13 @@ func (c *client) search(platform, keyword string, limit int) ([]track, int, erro
 // collection fetches an album, playlist or song. Albums come back whole
 // regardless of page size, playlists page, so loop until a short page.
 func (c *client) collection(kind, platform, id string) (collection, error) {
+	return c.collectionContext(context.Background(), kind, platform, id)
+}
+
+func (c *client) collectionContext(ctx context.Context, kind, platform, id string) (collection, error) {
 	var out collection
 	for page := 1; page <= maxPages; page++ {
-		data, err := c.post(kind, url.Values{
+		data, err := c.postContext(ctx, kind, url.Values{
 			"platform": {platform},
 			"id":       {id},
 			"page":     {strconv.Itoa(page)},
@@ -180,27 +203,47 @@ func (c *client) collection(kind, platform, id string) (collection, error) {
 }
 
 func (c *client) resolve(platform string, t track, q quality) (string, error) {
-	data, err := c.post("getUrl", url.Values{
-		"platform": {platform},
-		"songid":   {string(t.ID)},
-		"format":   {q.Format},
-		"bitrate":  {string(q.Bitrate)},
-		"time":     {strconv.FormatInt(t.Time, 10)},
-		"sign":     {t.Sign},
-	})
-	if err != nil {
-		return "", err
+	return c.resolveContext(context.Background(), platform, t, q)
+}
+
+func (c *client) resolveContext(ctx context.Context, platform string, t track, q quality) (string, error) {
+	for attempt := 0; ; attempt++ {
+		data, err := c.postContext(ctx, "getUrl", url.Values{
+			"platform": {platform},
+			"songid":   {string(t.ID)},
+			"format":   {q.Format},
+			"bitrate":  {string(q.Bitrate)},
+			"time":     {strconv.FormatInt(t.Time, 10)},
+			"sign":     {t.Sign},
+		})
+		if err != nil {
+			return "", err
+		}
+		var got struct {
+			URL    string `json:"url"`
+			SongID loose  `json:"songid"`
+		}
+		if err := json.Unmarshal(data, &got); err != nil {
+			return "", fmt.Errorf("getUrl: %w", err)
+		}
+		if got.URL == "" {
+			return "", errors.New("getUrl: empty url")
+		}
+		// The upstream sometimes substitutes a spoken notice under a different song ID.
+		if got.SongID == t.ID {
+			return got.URL, nil
+		}
+		if attempt == 2 {
+			return "", fmt.Errorf("getUrl: upstream returned track %q instead of %q", got.SongID, t.ID)
+		}
+		timer := time.NewTimer(time.Duration(attempt+1) * 300 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return "", ctx.Err()
+		case <-timer.C:
+		}
 	}
-	var got struct {
-		URL string `json:"url"`
-	}
-	if err := json.Unmarshal(data, &got); err != nil {
-		return "", fmt.Errorf("getUrl: %w", err)
-	}
-	if got.URL == "" {
-		return "", errors.New("getUrl: empty url")
-	}
-	return got.URL, nil
 }
 
 func (c *client) lyric(platform string, t track) (string, error) {

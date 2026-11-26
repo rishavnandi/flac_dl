@@ -1,0 +1,178 @@
+{{define "charts"}}
+<div class="view-header">
+  <div>
+    <p class="eyebrow">{{.Eyebrow}}</p>
+    <h1>{{if eq .ChartKind "albums"}}Top albums{{else}}Discover{{end}}</h1>
+    <p class="view-description">The most-played music in the United States.</p>
+  </div>
+  <div class="chart-tabs" role="tablist" aria-label="Apple Music charts">
+    <a href="/charts/songs" hx-get="/charts/songs" hx-target="#view" hx-push-url="true" role="tab" aria-selected="{{if eq .ChartKind "songs"}}true{{else}}false{{end}}" class="{{if eq .ChartKind "songs"}}selected{{end}}">Songs</a>
+    <a href="/charts/albums" hx-get="/charts/albums" hx-target="#view" hx-push-url="true" role="tab" aria-selected="{{if eq .ChartKind "albums"}}true{{else}}false{{end}}" class="{{if eq .ChartKind "albums"}}selected{{end}}">Albums</a>
+  </div>
+</div>
+
+{{if .Hero.Name}}
+<section class="feature-card">
+  <div class="feature-copy">
+    <p class="eyebrow">FEATURED {{if eq .ChartKind "albums"}}ALBUM{{else}}TRACK{{end}} · #1 IN THE US</p>
+    <h2>{{.Hero.Name}}</h2>
+    <p class="feature-artist">{{.Hero.Artist}}</p>
+    <a class="button button-primary" href="{{.Hero.SearchURL}}" hx-get="{{.Hero.SearchURL}}" hx-target="#view" hx-push-url="true">
+      <span aria-hidden="true">⌕</span> Find on Kuwo
+    </a>
+  </div>
+  <div class="feature-art">
+    {{if .Hero.Artwork}}<img src="{{.Hero.Artwork}}" alt="{{.Hero.ArtworkAlt}}" fetchpriority="high">{{else}}<div class="cover-placeholder large">♫</div>{{end}}
+  </div>
+</section>
+{{end}}
+
+{{if eq .ChartKind "albums"}}
+  <div class="section-title-row">
+    <div><p class="eyebrow">THE CURRENT ROTATION</p><h2>Top albums</h2></div>
+    <span class="section-meta">TOP 20 · UNITED STATES</span>
+  </div>
+  <div class="album-grid">
+    {{range .Charts}}
+    <article class="album-card">
+      <a class="album-cover-link" href="{{.SearchURL}}" hx-get="{{.SearchURL}}" hx-target="#view" hx-push-url="true" aria-label="Find {{.Name}} by {{.Artist}} on Kuwo">
+        {{if .Artwork}}<img src="{{.Artwork}}" alt="{{.ArtworkAlt}}" loading="lazy" decoding="async">{{else}}<div class="cover-placeholder">♫</div>{{end}}
+        <span class="card-play">⌕</span>
+      </a>
+      <div class="album-card-meta"><span class="rank-pill">#{{.Rank}}</span><span class="chart-label">US CHART</span></div>
+      <a class="album-card-title" href="{{.SearchURL}}" hx-get="{{.SearchURL}}" hx-target="#view" hx-push-url="true">{{.Name}}</a>
+      <div class="album-card-artist">{{.Artist}}</div>
+    </article>
+    {{end}}
+  </div>
+{{else}}
+  <div class="section-title-row">
+    <div><p class="eyebrow">THE CURRENT ROTATION</p><h2>Top songs</h2></div>
+    <span class="section-meta">TOP 20 · UNITED STATES</span>
+  </div>
+  <div class="chart-list">
+    {{range .Charts}}
+    <article class="chart-row">
+      <span class="chart-rank">{{printf "%02d" .Rank}}</span>
+      <a class="chart-art-link" href="{{.SearchURL}}" hx-get="{{.SearchURL}}" hx-target="#view" hx-push-url="true" aria-label="Find {{.Name}} by {{.Artist}} on Kuwo">
+        {{if .Artwork}}<img src="{{.Artwork}}" alt="{{.ArtworkAlt}}" loading="lazy" decoding="async">{{else}}<div class="cover-placeholder small">♫</div>{{end}}
+      </a>
+      <div class="chart-row-copy">
+        <a class="chart-row-title" href="{{.SearchURL}}" hx-get="{{.SearchURL}}" hx-target="#view" hx-push-url="true">{{.Name}}</a>
+        <span>{{.Artist}}</span>
+      </div>
+      <span class="chart-row-source">US TOP 20</span>
+      <a class="icon-action chart-find" href="{{.SearchURL}}" hx-get="{{.SearchURL}}" hx-target="#view" hx-push-url="true" aria-label="Find {{.Name}} on Kuwo" title="Find on Kuwo">⌕</a>
+    </article>
+    {{end}}
+  </div>
+{{end}}
+<p class="source-note">Charts update from Apple Music. Audio and downloads are provided by Kuwo.</p>
+{{end}}
+
+{{define "search"}}
+<div class="view-header search-header">
+  <div>
+    <p class="eyebrow">{{.Eyebrow}}</p>
+    <h1>Search results{{if .Query}} for “{{.Query}}”{{end}}</h1>
+    <p class="view-description">{{.Description}}</p>
+  </div>
+  <span class="result-count">{{len .Tracks}} <small>TRACKS</small></span>
+</div>
+<div class="result-tabs"><span class="selected">Tracks</span><span class="catalog-label">KUWO CATALOG</span></div>
+{{if .Tracks}}
+  <div class="track-list">
+    <div id="track-rows">{{template "track-rows" .Tracks}}</div>
+  </div>
+  {{if .HasMore}}
+    <div class="load-more-wrap">
+      <a class="button button-quiet" href="/search?q={{urlquery .Query}}&amp;page={{add .Page 1}}" hx-get="/search?q={{urlquery .Query}}&amp;page={{add .Page 1}}" hx-target="#view" hx-push-url="true" hx-indicator="#busy">Load more results</a>
+    </div>
+  {{end}}
+{{else}}
+  <div class="empty-state">
+    <div class="empty-glyph">⌕</div>
+    <h2>No tracks found</h2>
+    <p>Try a different title or artist. Kuwo results appear here.</p>
+  </div>
+{{end}}
+{{end}}
+
+{{define "track-rows"}}
+{{range .}}
+<div class="track-row" data-track-id="{{.ID}}">
+  <div class="track-primary">
+    <button type="button" class="track-play play-track" data-action="play" data-id="{{.ID}}" data-name="{{.Name}}" data-artist="{{.Artist}}" data-art="{{.Artwork}}" data-fallback="{{.ArtworkFallback}}" aria-label="Play {{.Name}}">▶</button>
+    {{if .Artwork}}
+      <img class="track-art" src="{{.Artwork}}" data-fallback="{{.ArtworkFallback}}" alt="{{.ArtworkAlt}}" loading="lazy" decoding="async">
+    {{else if .ArtworkFallback}}
+      <img class="track-art" src="{{.ArtworkFallback}}" alt="{{.ArtworkAlt}}" loading="lazy" decoding="async">
+    {{else}}
+      <div class="track-art track-art-placeholder">♫</div>
+    {{end}}
+    <div class="track-copy"><div class="track-title-line"><strong title="{{.Name}}">{{.Name}}</strong>{{if .Quality}}<span class="quality-badge">{{.Quality}}</span>{{end}}</div><span title="{{.Artist}}">{{.Artist}}</span></div>
+  </div>
+  <div class="track-album">
+    {{if .AlbumURL}}<a href="{{.AlbumURL}}" hx-get="{{.AlbumURL}}" hx-target="#view" hx-push-url="true">{{.AlbumName}}</a>{{else}}{{.AlbumName}}{{end}}
+  </div>
+  <span class="track-duration">{{.Duration}}</span>
+  {{if .Hosted}}
+  <a class="icon-action download-form browser-download" href="/stream?id={{.ID}}&amp;q=auto&amp;download=1" download aria-label="Download {{.Name}}" title="Save to your device"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></svg></a>
+  {{else}}<form class="download-form" hx-post="/download" hx-target="#toast" hx-swap="innerHTML" hx-include="#quality,#lyrics" hx-indicator="#busy">
+    <input type="hidden" name="track_id" value="{{.ID}}">
+    <button class="icon-action" type="submit" aria-label="Download {{.Name}}" title="Download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></svg></button>
+  </form>{{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "album"}}
+<section class="album-hero">
+  <div class="album-hero-art">
+    {{if .Album.Artwork}}<img src="{{.Album.Artwork}}" data-fallback="{{.Album.ArtworkFallback}}" alt="{{.Album.Name}} cover" fetchpriority="high">{{else}}<div class="cover-placeholder large">♫</div>{{end}}
+  </div>
+  <div class="album-hero-copy">
+    <p class="eyebrow">{{.Eyebrow}} · KUWO</p>
+    <h1>{{.Album.Name}}</h1>
+    <p class="album-artist">{{.Album.Artist}}</p>
+    <p class="view-description">{{len .Tracks}} {{if eq (len .Tracks) 1}}track{{else}}tracks{{end}} · stream or save to your library.</p>
+    <div class="album-actions">
+      <button type="button" class="button button-primary" data-action="play-first">▶ <span>Play album</span></button>
+      {{if .Hosted}}
+      <span class="hosted-download-note">Save individual tracks below. Full album downloads are available in the local app.</span>
+      {{else}}<form hx-post="/download" hx-target="#toast" hx-swap="innerHTML" hx-include="#quality,#lyrics" hx-indicator="#busy">
+        <input type="hidden" name="track_id" value="{{.Album.ID}}">
+        <input type="hidden" name="album" value="{{.Album.ID}}">
+        <button class="button button-outline" type="submit" aria-label="Download album">↓ <span>Download album</span></button>
+      </form>{{end}}
+    </div>
+  </div>
+</section>
+<div class="section-title-row album-track-heading">
+  <div><p class="eyebrow">FULL RELEASE</p><h2>Track list</h2></div>
+  <span class="section-meta">{{len .Tracks}} TRACKS</span>
+</div>
+<div class="track-list">
+  <div id="track-rows">{{template "track-rows" .Tracks}}</div>
+</div>
+{{end}}
+
+{{define "error"}}
+<div class="view-header">
+  <div><p class="eyebrow">{{.Eyebrow}}</p><h1>{{.Title}}</h1></div>
+</div>
+<div class="notice-card"><span class="notice-mark">!</span><p>{{.Error}}</p><a class="button button-quiet" href="/" hx-get="/charts/songs" hx-target="#view" hx-push-url="true">Back to charts</a></div>
+{{end}}
+
+{{define "download-status"}}
+<div class="download-toast {{if eq .State "error"}}has-error{{end}}" {{if eq .State "active"}}hx-get="/download-status?id={{.ID}}" hx-trigger="every 1s" hx-swap="outerHTML"{{end}}>
+  <div class="download-toast-icon">{{if eq .State "done"}}✓{{else if eq .State "error"}}!{{else}}↓{{end}}</div>
+  <div class="download-toast-copy">
+    <strong>{{if eq .State "active"}}Saving to ./downloads{{else if eq .State "done"}}Download complete{{else}}Download finished with errors{{end}}</strong>
+    <span>{{.Label}} · {{.Finished}} / {{.Total}} tracks{{if gt .Active 0}} · {{.Active}} active{{end}}{{if gt .Skipped 0}} · {{.Skipped}} skipped{{end}}{{if gt .Failed 0}} · {{.Failed}} failed{{end}}</span>
+    {{if .Error}}<small>{{.Error}}</small>{{end}}
+    {{if eq .State "active"}}<progress max="100" value="{{.ProgressPercent}}"></progress>{{end}}
+  </div>
+  {{if ne .State "active"}}<button type="button" class="icon-action toast-dismiss" data-action="dismiss-toast" aria-label="Dismiss notification">×</button>{{end}}
+</div>
+{{end}}

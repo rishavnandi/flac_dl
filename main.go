@@ -14,12 +14,26 @@ import (
 const version = "0.1.0"
 
 func main() {
+	if os.Getenv("VERCEL") == "1" {
+		if err := runHostedWeb(os.Getenv("PORT")); err != nil {
+			fmt.Fprintln(os.Stderr, "flac_dl: "+err.Error())
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) < 2 {
-		usage()
-		os.Exit(2)
+		if err := runWeb(webDefaultAddr); err != nil {
+			fmt.Fprintln(os.Stderr, "flac_dl: "+err.Error())
+			os.Exit(1)
+		}
+		return
 	}
 	var err error
 	switch os.Args[1] {
+	case "web":
+		err = cmdWeb(os.Args[2:])
+	case "tui":
+		err = runTUI()
 	case "search":
 		err = cmdSearch(os.Args[2:])
 	case "get":
@@ -45,13 +59,29 @@ func usage() {
 	fmt.Fprint(os.Stderr, `flac_dl - search and download lossless music
 
 usage:
+  flac_dl                    open the local web app
+  flac_dl web [-addr 127.0.0.1:8765]
+  flac_dl tui                 open the terminal UI
   flac_dl search <keywords> [-p kuwo|wyy] [-n 20] [--json]
   flac_dl search <keywords> --take 1,4 [-q flac] [-o dir] [--lrc]
   flac_dl get <song id | page url | cdn url> [-q auto|flac|320|128] [-o dir] [--lrc] [--force]
   flac_dl album <album or playlist id | page url> [-q auto|flac|320|128] [-o dir] [-j 4] [--lrc] [--force]
 
-files are named "Artist - Title.flac" in the output directory.
+the TUI downloads into ./downloads; the subcommands write to -o (default .).
+files are named "Artist - Title.flac".
 `)
+}
+
+func cmdWeb(args []string) error {
+	fs := flag.NewFlagSet("web", flag.ContinueOnError)
+	addr := fs.String("addr", webDefaultAddr, "loopback address to serve on")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("usage: flac_dl web [-addr 127.0.0.1:8765]")
+	}
+	return runWeb(*addr)
 }
 
 func cmdSearch(args []string) error {

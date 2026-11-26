@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "go",
+  "buildCommand": "CGO_ENABLED=0 go build -tags=vercel -o server .",
+  "regions": ["hkg1"],
+  "functions": {
+    "main.go": {
+      "maxDuration": 300
+    }
+  }
+}

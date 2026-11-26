@@ -1,121 +1,191 @@
 # flac_dl
 
-A command line client for [flac.music.hi.cn](https://flac.music.hi.cn), a
-multi-site lossless music search. Search Kuwo and NetEase, then download FLAC,
-320k or 128k files with their lyrics.
+A Go music browser and downloader for [flac.music.hi.cn](https://flac.music.hi.cn).
+Browse Apple Music's US charts, search Kuwo, explore albums, stream tracks, and
+download FLAC, 320k or 128k audio with optional lyrics.
 
-The site is a React SPA over a small JSON API. This tool talks to the same API,
-so search, album and playlist handling behave exactly like the web page, without
-a browser and without its download modals.
+The default app is a Go `net/http` site with HTMX and a built-in browser audio
+player. It uses an AMOLED black and monochrome interface inspired by Monochrome Music.
+The Bubble Tea terminal UI and the non-interactive commands remain available.
 
 Not affiliated with the site, Kuwo or NetEase. Personal use only. Do not
 redistribute what you download.
 
-## Install
+## Build and run
 
-Requires Go 1.22 or newer.
+Requires Go 1.24.2 or newer.
 
 ```sh
-git clone <this repo> flac_dl
-cd flac_dl
-go build -o ~/.local/bin/flac_dl .
+go build -o ./flac_dl .
+./flac_dl
 ```
 
-`~/.local/bin` is on `PATH` on this machine. For a one-off build, `go build .`
-leaves a `flac_dl` binary in the current directory.
+The binary stays in this project directory. Running it without arguments starts
+the local web app at `127.0.0.1:8765` and opens it in your browser. To choose a
+different loopback port, run `./flac_dl web -addr 127.0.0.1:8766`.
+`./flac_dl tui` opens the terminal UI. Run `./flac_dl --help` for the download
+commands.
 
-## Usage
+## Web app
+
+The home page shows Apple's US top songs. Switch to the albums chart, or search
+Kuwo from the header. Chart entries open Kuwo search results. Search results
+include cover art, album links, format details, streaming playback and downloads.
+Album pages include the full track list, play-all and album download actions.
+
+Use the bottom player for play/pause, track navigation, seeking and volume.
+Choose Auto, FLAC, 320 kbps or 128 kbps from the quality menu. Auto prefers
+FLAC, then 320-kbps MP3, then the last listed format. The player uses the
+browser's audio codecs and device. Local downloads go to `./downloads/`; album
+downloads run up to four tracks at once.
+
+Press `/` or `Cmd/Ctrl+K` to focus search. `Space` plays or pauses when you are
+not using a form or another control. Volume, quality and lyric preferences are
+remembered in your browser. The current track stays highlighted in results.
+Home, album links and back/forward navigation keep the player running.
+Refreshing the page stops playback.
+
+The featured banner, album header and player use subtle blurred-cover tints.
+The tint follows the displayed artwork, including fallback covers. Missing
+artwork keeps the interface neutral, and text and controls stay monochrome.
+
+The upstream can return a short spoken notice instead of the requested song,
+even with a successful API status. The shared resolver verifies the returned
+song ID and retries a mismatched response before reporting an error.
+
+Cover art uses Kuwo's image URL first and falls back to an exact Apple iTunes
+artist/album match when needed. Images load lazily in the browser. The page and
+HTMX assets are embedded in the executable. The local server binds to a
+loopback address only.
+
+Run `go test -race ./...` for the Go tests and `bun test tests/web_app.test.js`
+for the browser-state and keyboard regression tests.
+
+## Vercel deployment
+
+The public site supports charts, search, albums, playback and individual track
+downloads to the visitor's device. Downloads stream through the function and
+are not saved on the server. Full album saving and lyric downloads remain
+features of the local app.
+
+`vercel.json` selects Vercel's Go runtime and builds with the `vercel` tag.
+That build excludes the terminal UI and native audio libraries. The normal
+`go build` command still includes the CLI, TUI and local web app.
+
+After signing in to the Vercel CLI:
 
 ```sh
-# search; the number on the left is the --take index, the id is on the right
-flac_dl search "tron legacy"
+vercel link --yes --project flac_dl
+vercel deploy --prod --yes
+```
 
+Vercel supplies the port and deployment hostnames. The hosted server accepts
+only those hostnames and does not start local background download jobs.
+API and CDN availability depends on the upstream services. A public deployment
+also consumes the owner's Vercel transfer and function allowance.
+
+## TUI controls
+
+| key | action |
+| --- | --- |
+| `/` | focus search |
+| `enter` | find a chart item on Kuwo, or open the selected track's album |
+| `1` / `2` | show US top songs / albums |
+| `r` | refresh charts |
+| `↑` / `↓`, `j` / `k` | move through results |
+| `pgup` / `pgdn`, `ctrl+u` / `ctrl+d` | jump through the list |
+| `esc` | blur search, return from an album, or return to charts |
+| `d` | download the selected track |
+| `A` | download the open album |
+| `space` | stream or pause/resume the selected Kuwo result |
+| `s` | stop playback |
+| `tab` | cycle quality: auto, FLAC, 320k, 128k |
+| `l` | toggle lyric downloads |
+| `?` | show key help |
+| `q` | quit |
+
+Search pages load as you move down the results. The chart feed is Apple's public
+RSS JSON endpoint and needs no account or token. It provides chart discovery,
+not audio playback. Press `enter` on a chart entry to search Kuwo, then press
+`space` on a result to stream it through the system audio device. On a wide
+terminal, the selected item and its cover art appear in a detail pane. Cover art
+uses true-colour ANSI and half-block characters. It tries Kuwo's image URL
+first, then Apple's public iTunes Search API for an exact artist/album match.
+The selected cover loads first; visible chart, search and album covers then
+prefetch sequentially in the background.
+Downloads go to `./downloads/`; album downloads use four workers, and existing
+files are skipped. The TUI uses the selected quality for playback and downloads.
+`auto` prefers FLAC, then 320k MP3, then the last available format. Playback
+supports FLAC and MP3 and does not save a copy. The TUI remembers quality and
+lyric settings only while it runs. If the search field is focused, `?` opens
+help and other typed characters stay in the query.
+
+## Non-interactive commands
+
+```sh
 # search and download the first result as FLAC
-flac_dl search "tron legacy" --take 1 -q flac -o ~/Music
+./flac_dl search "tron legacy" --take 1 -q flac -o ~/Music
 
-# download one track by id or by page link
-flac_dl get 2407050 -o ~/Music
-flac_dl get https://www.kuwo.cn/play_detail/2407050 --lrc
+# download one track by id or page link
+./flac_dl get 2407050 -o ~/Music
+./flac_dl get https://www.kuwo.cn/play_detail/2407050 --lrc
 
-# a whole album or playlist, six downloads in parallel
-flac_dl album 215821 -j 6 -o ~/Music
-flac_dl album https://www.kuwo.cn/playlist_detail/3823890 -q 320
+# download an album or playlist
+./flac_dl album 215821 -j 6 -o ~/Music
+./flac_dl album https://www.kuwo.cn/playlist_detail/3823890 -q 320
 
-# a direct CDN link, keeping its file name
-flac_dl get 'https://other-er.kuwo.cn/.../F000002Cv1ef1RJlHs.flac' -o ~/Music
+# download a direct CDN link, keeping its file name
+./flac_dl get 'https://other-er.kuwo.cn/.../F000002Cv1ef1RJlHs.flac' -o ~/Music
 ```
 
-Files are written as `Artist - Title.flac`, `Artist - Title.mp3` and
-`Artist - Title.lrc`. Existing files are skipped unless `--force` is given.
+Files are named `Artist - Title.flac`, `Artist - Title.mp3` and
+`Artist - Title.lrc`. The TUI uses the same naming rules.
 
-### search
+### Search flags
 
 | flag | default | meaning |
 | --- | --- | --- |
 | `-p` | `kuwo` | platform: `kuwo` or `wyy` |
-| `-n` | `20` | results to list; pages past the API's 20 per request |
-| `--json` | off | print the raw result list as JSON |
-| `--take` | | download these result numbers, e.g. `1,4` |
-| `-q` | `auto` | quality for `--take`: `auto`, `flac`, `320`, `128` |
+| `-n` | `20` | number of results; pages past the API's 20 per request |
+| `--json` | off | print results as JSON |
+| `--take` | | download result numbers, e.g. `1,4` |
+| `-q` | `auto` | quality: `auto`, `flac`, `320`, `128` |
 | `-o` | `.` | output directory |
 | `--lrc` | off | also download lyrics |
 | `--force` | off | overwrite existing files |
 
-### get
+`get` uses `-p`, `-q`, `-o`, `--lrc` and `--force`. `album` has the same flags
+plus `-j` (default `4`) for parallel downloads. A bare album number falls back
+to a playlist lookup if the album lookup returns no tracks.
 
-| flag | default | meaning |
-| --- | --- | --- |
-| `-p` | `kuwo` | platform for a bare id |
-| `-q` | `auto` | `auto`, `flac`, `320`, `128` |
-| `-o` | `.` | output directory |
-| `--lrc` | off | also download lyrics |
-| `--force` | off | overwrite existing files |
-
-### album
-
-Same flags as `get`, plus `-j` (default `4`) for parallel downloads. A bare
-number is read as an album id and falls back to a playlist id if the album call
-finds nothing; a page link states its own kind.
-
-### Quality
-
-`auto` picks FLAC when the track has it, otherwise 320k, otherwise the last
-format offered. An explicit `-q` is strict: a track without that format is
-reported with the formats it does have, and skipped during an album download.
+`auto` picks FLAC when available, then 320k, then the best offered fallback. An
+explicit quality is strict. Tracks without it are skipped in album downloads.
 
 ## How it works
 
-Every action is a form-encoded `POST` to `https://flac.music.hi.cn/ajax.php`:
+Every action is a form-encoded `POST` to
+`https://flac.music.hi.cn/ajax.php`. The app uses `search`, `album`, `playlist`,
+`song`, `getUrl` and `getLyric`. Each result includes a server-issued `time` and
+`sign`; the app resolves a fresh CDN link for every download and does not cache
+the short-lived links.
 
-| `act` | parameters | returns |
-| --- | --- | --- |
-| `search` | platform, keyword, page, size | 20 tracks per page, total |
-| `album` | platform, id | album info and every track |
-| `playlist` | platform, id, page, size | playlist info and a page of tracks |
-| `song` | platform, id | one track |
-| `getUrl` | platform, songid, format, bitrate, time, sign | a CDN URL |
-| `getLyric` | platform, songid, time, sign | LRC text |
-
-Each track row carries a server-issued `time` and `sign`. `getUrl` rejects a bad
-pair (`code -2`) and an expired one (`code -3`), so the tool never caches
-signatures or links: it resolves fresh for every download. CDN URLs are
-tokenised and short-lived, which is why a failed transfer is retried from a new
-resolve rather than resumed.
-
-Downloads go to `name.part` and are renamed only after the byte count matches
-`Content-Length`, so a dropped connection cannot leave a half file with a
-plausible name.
+Audio downloads write to a `.part` file and rename it only after the byte count
+matches `Content-Length`. A failed transfer is retried using a fresh link, not
+resumed.
 
 ## Limits
 
-- Everything depends on `flac.music.hi.cn` staying up. It is a third-party
-  scraper front end with no promise of stability.
-- The site's NetEase backend is broken (`接口请求失败` or empty results), so
-  `-p wyy` rarely works. Kuwo is reliable.
-- The API caps a search page at 20 rows; `-n` above 20 costs extra requests.
-- No resume. Partial files are deleted and the track is fetched again.
-- Only file names are set. Kuwo's FLACs already carry `TITLE`, `ARTIST` and
-  `ALBUM` Vorbis comments, so no tagging step is needed.
+- The app depends on `flac.music.hi.cn` staying available.
+- The site's NetEase backend is unreliable (`接口请求失败` or empty results);
+  Kuwo is the dependable platform.
+- Cover art is best-effort. Kuwo image URLs can time out; the iTunes fallback is
+  rate-limited by Apple and only uses exact artist and album matches.
+- Chart listings come from Apple's US storefront. Audio is still resolved by the
+  existing Kuwo download API; the chart feed does not provide playable audio.
+- Direct CDN links keep their opaque server filename because they do not carry
+  track metadata.
+- No resume support. Partial files are removed and fetched again.
+- Kuwo FLACs already include TITLE, ARTIST and ALBUM tags.
 
 ## Development
 
@@ -124,8 +194,8 @@ go test ./...
 go vet ./...
 ```
 
-The tests replay canned API responses through `httptest`, so they need no
-network.
+API tests use canned responses with `httptest`. TUI tests verify rendered cell
+dimensions. Tests do not require network access.
 
 ## License
 

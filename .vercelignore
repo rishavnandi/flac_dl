@@ -1,0 +1,7 @@
+flac_dl
+server
+downloads/
+.openchamber/
+*.part
+tests/
+**/*_test.go

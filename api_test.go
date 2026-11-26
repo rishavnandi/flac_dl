@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -8,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 )
 
 // testClient serves canned responses and records every call.
@@ -101,7 +104,7 @@ func TestSearchSurfacesAPICode(t *testing.T) {
 
 func TestResolveSendsSignature(t *testing.T) {
 	c, acts, forms := testClient(t, func(string, url.Values) string {
-		return `{"code":0,"data":{"url":"https://cdn.example/a.flac"}}`
+		return `{"code":0,"data":{"url":"https://cdn.example/a.flac","songid":42}}`
 	})
 
 	link, err := c.resolve("kuwo", track{ID: "42", Time: 1795630934, Sign: "abc"}, quality{Format: "flac", Bitrate: "2000"})
@@ -119,6 +122,71 @@ func TestResolveSendsSignature(t *testing.T) {
 		if form.Get(k) != want {
 			t.Fatalf("form %s = %q, want %q", k, form.Get(k), want)
 		}
+	}
+}
+
+func TestResolveContextCanCancelPlaybackLookup(t *testing.T) {
+	c, _, _ := testClient(t, func(string, url.Values) string {
+		return `{"code":0,"data":{"url":"https://cdn.example/a.flac","songid":42}}`
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := c.resolveContext(ctx, "kuwo", track{ID: "42"}, quality{Format: "flac"})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("resolve error = %v, want context canceled", err)
+	}
+}
+
+func TestResolveRetriesWrongTrackInsteadOfPlayingNotice(t *testing.T) {
+	attempts := 0
+	c, _, _ := testClient(t, func(string, url.Values) string {
+		attempts++
+		if attempts == 1 {
+			return `{"code":0,"data":{"url":"https://other-bj.kuwo.cn/2044590383.mp3","songid":661178187,"duration":12,"format":"mp3","bitrate":1}}`
+		}
+		return `{"code":0,"data":{"url":"https://cdn.example/song.flac","songid":"668000613"}}`
+	})
+	link, err := c.resolve("kuwo", track{ID: "668000613"}, quality{Format: "flac"})
+	if err != nil || link != "https://cdn.example/song.flac" || attempts != 2 {
+		t.Fatalf("resolve = %q, %v after %d attempts", link, err, attempts)
+	}
+}
+
+func TestResolveRejectsUnverifiedTrack(t *testing.T) {
+	for _, id := range []string{`"661178187"`, `null`} {
+		t.Run(id, func(t *testing.T) {
+			c, acts, _ := testClient(t, func(string, url.Values) string {
+				return `{"code":0,"data":{"url":"https://cdn.example/notice.mp3","songid":` + id + `}}`
+			})
+			link, err := c.resolve("kuwo", track{ID: "42"}, quality{Format: "mp3"})
+			if err == nil || link != "" || len(*acts) != 3 {
+				t.Fatalf("unverified resolve = %q, %v after %d calls", link, err, len(*acts))
+			}
+		})
+	}
+}
+
+func TestResolveRetryHonorsCancellation(t *testing.T) {
+	c, acts, _ := testClient(t, func(string, url.Values) string {
+		return `{"code":0,"data":{"url":"https://cdn.example/notice.mp3","songid":661178187}}`
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	_, err := c.resolveContext(ctx, "kuwo", track{ID: "42"}, quality{Format: "mp3"})
+	if !errors.Is(err, context.DeadlineExceeded) || len(*acts) != 1 {
+		t.Fatalf("retry cancellation = %v after %d calls", err, len(*acts))
+	}
+}
+
+func TestCollectionContextCanCancelLookup(t *testing.T) {
+	c, _, _ := testClient(t, func(string, url.Values) string {
+		return `{"code":0,"data":{"list":[]}}`
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := c.collectionContext(ctx, "song", "kuwo", "42")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("collection error = %v, want context canceled", err)
 	}
 }
 

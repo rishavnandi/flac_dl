@@ -1,3 +1,9 @@
 /flac_dl
+/downloads/
 *.part
 .DS_Store
+/server
+/.vercel/
+/.openchamber/
+.env*
+.vercel

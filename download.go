@@ -16,6 +16,7 @@ import (
 )
 
 const maxNameBytes = 180
+const downloadDir = "downloads"
 
 var unsafeName = regexp.MustCompile(`[/\\:*?"<>|\x00-\x1f\x7f]`)
 
@@ -41,6 +42,12 @@ func newDownloader(c *client) *downloader {
 // Links are tokens that expire, so a failed transfer is retried from a new
 // resolve rather than resumed.
 func (d *downloader) fetch(j job) (path string, skipped bool, err error) {
+	return d.fetchWith(j, nil)
+}
+
+type progressFunc func(done, total int64)
+
+func (d *downloader) fetchWith(j job, progress progressFunc) (path string, skipped bool, err error) {
 	path = filepath.Join(j.dir, fileName(j.track, extOf(j.quality)))
 	if !j.force {
 		if st, statErr := os.Stat(path); statErr == nil && st.Size() > 0 {
@@ -57,7 +64,7 @@ func (d *downloader) fetch(j job) (path string, skipped bool, err error) {
 		if resolveErr != nil {
 			return "", false, resolveErr
 		}
-		if last = d.get(link, path); last == nil {
+		if last = d.getWith(link, path, progress); last == nil {
 			break
 		}
 	}
@@ -74,6 +81,10 @@ func (d *downloader) fetch(j job) (path string, skipped bool, err error) {
 }
 
 func (d *downloader) get(link, path string) error {
+	return d.getWith(link, path, nil)
+}
+
+func (d *downloader) getWith(link, path string, progress progressFunc) error {
 	req, err := http.NewRequest(http.MethodGet, link, nil)
 	if err != nil {
 		return err
@@ -92,7 +103,11 @@ func (d *downloader) get(link, path string) error {
 	if err != nil {
 		return err
 	}
-	n, err := io.Copy(f, resp.Body)
+	var src io.Reader = resp.Body
+	if progress != nil {
+		src = &progressReader{r: resp.Body, total: resp.ContentLength, cb: progress}
+	}
+	n, err := io.Copy(f, src)
 	if closeErr := f.Close(); err == nil {
 		err = closeErr
 	}
@@ -104,7 +119,28 @@ func (d *downloader) get(link, path string) error {
 		os.Remove(part)
 		return fmt.Errorf("truncated: %d of %d bytes", n, resp.ContentLength)
 	}
+	if progress != nil {
+		progress(n, resp.ContentLength)
+	}
 	return os.Rename(part, path)
+}
+
+type progressReader struct {
+	r     io.Reader
+	total int64
+	read  int64
+	last  time.Time
+	cb    progressFunc
+}
+
+func (p *progressReader) Read(b []byte) (int, error) {
+	n, err := p.r.Read(b)
+	p.read += int64(n)
+	if now := time.Now(); now.Sub(p.last) >= 100*time.Millisecond || err != nil {
+		p.last = now
+		p.cb(p.read, p.total)
+	}
+	return n, err
 }
 
 func (d *downloader) writeLyric(j job, audioPath string) error {
