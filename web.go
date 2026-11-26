@@ -172,7 +172,7 @@ func securityHeaders(next http.Handler, publicHosts map[string]bool) http.Handle
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' https: data:; media-src 'self' https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' https: data:; media-src 'self' https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://lrclib.net")
 		allowed := isLoopbackHost(r.Host)
 		if publicHosts != nil {
 			allowed = publicHosts[strings.ToLower(r.Host)]

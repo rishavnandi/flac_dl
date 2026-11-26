@@ -1,5 +1,7 @@
 # flac_dl
 
+[Live site](https://flacdl.vercel.app) · [Source](https://github.com/rishavnandi/flac_dl)
+
 A Go music browser and downloader for [flac.music.hi.cn](https://flac.music.hi.cn).
 Browse Apple Music's US charts, search Kuwo, explore albums, stream tracks, and
 download FLAC, 320k or 128k audio with optional lyrics.
@@ -49,6 +51,14 @@ The featured banner, album header and player use subtle blurred-cover tints.
 The tint follows the displayed artwork, including fallback covers. Missing
 artwork keeps the interface neutral, and text and controls stay monochrome.
 
+Click the artwork on the left of the player to open a full-window view with
+larger cover art, playback controls and seeking. Escape or the close button
+returns to browsing without stopping playback. Lyrics appear on the right
+(below the player on mobile) when available from [LRCLIB](https://lrclib.net).
+They load only when the view is opened, use no API key, and are plain text
+rather than time-synced highlighting. The lookup sends track metadata directly
+to LRCLIB and respects its retry limits.
+
 The upstream can return a short spoken notice instead of the requested song,
 even with a successful API status. The shared resolver verifies the returned
 song ID and retries a mismatched response before reporting an error.
@@ -83,6 +93,7 @@ Vercel supplies the port and deployment hostnames. The hosted server accepts
 only those hostnames and does not start local background download jobs.
 API and CDN availability depends on the upstream services. A public deployment
 also consumes the owner's Vercel transfer and function allowance.
+The public repository is connected to Vercel for automatic deployments.
 
 ## TUI controls
 

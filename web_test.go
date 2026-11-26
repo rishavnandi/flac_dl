@@ -49,7 +49,7 @@ func TestWebChartsAndStaticAssets(t *testing.T) {
 	if res.Code != http.StatusOK {
 		t.Fatalf("home status = %d", res.Code)
 	}
-	for _, want := range []string{"Discover", "Test Song", "https://is.example/test/600x600bb.jpg", "/static/site.css", `id="player-dock" class="player-dock" hx-preserve`, `class="brand" href="/" hx-get="/" hx-target="#view" hx-push-url="true"`, `id="view" class="view" hx-history-elt`} {
+	for _, want := range []string{"Discover", "Test Song", "https://is.example/test/600x600bb.jpg", "/static/site.css", `id="player-dock" class="player-dock" hx-preserve`, `class="brand" href="/" hx-get="/" hx-target="#view" hx-push-url="true"`, `id="view" class="view" hx-history-elt`, `id="fullscreen-player"`, `aria-label="Open full-screen player"`} {
 		if !strings.Contains(res.Body.String(), want) {
 			t.Errorf("home page missing %q", want)
 		}

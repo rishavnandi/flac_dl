@@ -74,7 +74,7 @@
 
   <footer id="player-dock" class="player-dock" hx-preserve>
     <div class="player-track">
-      <div class="player-art-wrap"><img id="player-art" alt="" src="/static/cover-placeholder.svg"></div>
+      <button type="button" class="player-art-wrap expand-player" data-action="expand-player" aria-label="Open full-screen player" title="Open full-screen player" disabled><img id="player-art" alt="" src="/static/cover-placeholder.svg"></button>
       <div class="player-track-copy">
         <strong id="player-title">Select a song</strong>
         <span id="player-artist">Find something worth listening to.</span>
@@ -98,6 +98,33 @@
       <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Volume">
     </div>
     <audio id="audio" preload="none"></audio>
+    <dialog id="fullscreen-player" class="fullscreen-player" aria-labelledby="fullscreen-title">
+      <header class="fullscreen-header">
+        <span>NOW PLAYING · flac_dl</span>
+        <button type="button" class="icon-action" data-action="close-player" aria-label="Close full-screen player" autofocus>×</button>
+      </header>
+      <div class="fullscreen-layout">
+        <section class="fullscreen-music">
+          <img id="fullscreen-artwork" class="fullscreen-artwork" src="/static/cover-placeholder.svg" alt="Current track cover">
+          <h2 id="fullscreen-title"></h2>
+          <p id="fullscreen-artist"></p>
+          <div class="player-timeline fullscreen-timeline">
+            <span id="fullscreen-elapsed">0:00</span>
+            <input id="fullscreen-seek" type="range" min="0" max="1000" value="0" aria-label="Full-screen playback position">
+            <span id="fullscreen-duration">--:--</span>
+          </div>
+          <div class="player-controls fullscreen-controls">
+            <button type="button" class="transport-button" data-action="previous" aria-label="Previous track"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5v14M19 5 8 12l11 7Z"/></svg></button>
+            <button type="button" class="transport-button play-toggle" id="fullscreen-toggle" data-action="toggle" aria-label="Play">▶</button>
+            <button type="button" class="transport-button" data-action="next" aria-label="Next track"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 5v14M5 5l11 7-11 7Z"/></svg></button>
+          </div>
+        </section>
+        <section class="fullscreen-lyrics" aria-labelledby="lyrics-heading">
+          <div class="lyrics-heading"><h3 id="lyrics-heading">Lyrics</h3><a href="https://lrclib.net" target="_blank" rel="noreferrer">Via LRCLIB ↗</a></div>
+          <p id="lyrics-content" tabindex="0">Lyrics appear here when available.</p>
+        </section>
+      </div>
+    </dialog>
   </footer>
 </body>
 </html>

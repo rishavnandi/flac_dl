@@ -102,7 +102,7 @@
 {{range .}}
 <div class="track-row" data-track-id="{{.ID}}">
   <div class="track-primary">
-    <button type="button" class="track-play play-track" data-action="play" data-id="{{.ID}}" data-name="{{.Name}}" data-artist="{{.Artist}}" data-art="{{.Artwork}}" data-fallback="{{.ArtworkFallback}}" aria-label="Play {{.Name}}">▶</button>
+    <button type="button" class="track-play play-track" data-action="play" data-id="{{.ID}}" data-name="{{.Name}}" data-artist="{{.Artist}}" data-album="{{.AlbumName}}" data-art="{{.Artwork}}" data-fallback="{{.ArtworkFallback}}" aria-label="Play {{.Name}}">▶</button>
     {{if .Artwork}}
       <img class="track-art" src="{{.Artwork}}" data-fallback="{{.ArtworkFallback}}" alt="{{.ArtworkAlt}}" loading="lazy" decoding="async">
     {{else if .ArtworkFallback}}

@@ -7,6 +7,12 @@
   const lyrics = document.querySelector("#lyrics");
   const toast = document.querySelector("#toast");
   const state = { queue: [], index: -1 };
+  const fullscreen = document.querySelector("#fullscreen-player");
+  const toggles = [toggle, document.querySelector("#fullscreen-toggle")];
+  const seeks = [seek, document.querySelector("#fullscreen-seek")];
+  let lyricsTrackID = "";
+  let lyricsAbort;
+  let lyricsRetryAt = 0;
 
   const tintArtwork = (image) => {
     const panel = image.closest(".feature-card, .album-hero, .player-dock");
@@ -37,8 +43,10 @@
 
   const paintPlayer = () => {
     const playing = !audio.paused;
-    toggle.textContent = playing ? "Ⅱ" : "▶";
-    toggle.setAttribute("aria-label", playing ? "Pause" : "Play");
+    toggles.forEach(button => {
+      button.textContent = playing ? "Ⅱ" : "▶";
+      button.setAttribute("aria-label", playing ? "Pause" : "Play");
+    });
     document.querySelector("#stream-quality").textContent = audio.dataset.trackId ? quality.value.toUpperCase() : "READY";
   };
 
@@ -69,8 +77,76 @@
 
   const currentTrack = () => state.queue[state.index];
 
+  const paintFullscreen = () => {
+    const item = currentTrack();
+    if (!item) return;
+    document.querySelector("#fullscreen-title").textContent = item.name;
+    document.querySelector("#fullscreen-artist").textContent = item.artist;
+    const cover = document.querySelector("#fullscreen-artwork");
+    if (cover.dataset.trackId !== item.id) {
+      cover.dataset.trackId = item.id;
+      cover.dataset.fallbackTried = "";
+      cover.dataset.fallback = item.fallback || "";
+      cover.src = document.querySelector("#player-art").src.replace("/albumcover/120/", "/albumcover/500/");
+      cover.alt = `${item.name} cover`;
+    }
+  };
+
+  const loadLyrics = async () => {
+    const item = currentTrack();
+    if (!fullscreen.open || !item || lyricsTrackID === item.id) return;
+    lyricsAbort?.abort();
+    lyricsTrackID = item.id;
+    const content = document.querySelector("#lyrics-content");
+    content.scrollTop = 0;
+    if (Date.now() < lyricsRetryAt) {
+      content.textContent = "The lyrics service is busy. Please try again later.";
+      return;
+    }
+    content.textContent = "Finding lyrics…";
+    const controller = lyricsAbort = new AbortController();
+    const url = new URL("https://lrclib.net/api/get");
+    url.searchParams.set("track_name", item.name);
+    url.searchParams.set("artist_name", item.artist);
+    if (item.album) url.searchParams.set("album_name", item.album);
+    const duration = Math.round(audio.duration);
+    if (duration >= 1 && duration <= 3600) url.searchParams.set("duration", String(duration));
+    try {
+      const response = await fetch(url, {
+        headers: { "Lrclib-Client": "flac_dl/0.1.0 (https://github.com/rishavnandi/flac_dl)" },
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]),
+      });
+      if (controller.signal.aborted || audio.dataset.trackId !== item.id) return;
+      if (response.status === 404) {
+        content.textContent = "No lyrics found for this track. Enjoy the music.";
+        return;
+      }
+      if (response.status === 429 || response.status === 503) {
+        const delay = Math.max(1, Number(response.headers.get("Retry-After")) || 60);
+        lyricsRetryAt = Date.now() + delay * 1000;
+        lyricsTrackID = "";
+        content.textContent = "The lyrics service is busy. Please try again later.";
+        return;
+      }
+      if (!response.ok) throw new Error("Lyrics unavailable");
+      const result = await response.json();
+      if (controller.signal.aborted || audio.dataset.trackId !== item.id) return;
+      content.textContent = result.instrumental ? "Instrumental · no lyrics." :
+        (typeof result.plainLyrics === "string" && result.plainLyrics.trim()) || "No lyrics found for this track. Enjoy the music.";
+    } catch {
+      if (!controller.signal.aborted && audio.dataset.trackId === item.id) {
+        lyricsTrackID = "";
+        content.textContent = "Lyrics are unavailable right now. Playback is unaffected.";
+      }
+    }
+  };
+
   const playTrack = async (item) => {
     if (!item || !item.id) return;
+    if (audio.dataset.trackId !== item.id) {
+      lyricsAbort?.abort();
+      lyricsTrackID = "";
+    }
     document.querySelector("#player-title").textContent = item.name || "Unknown track";
     document.querySelector("#player-artist").textContent = item.artist || "Kuwo";
     const art = document.querySelector("#player-art");
@@ -79,9 +155,12 @@
     art.dataset.fallback = item.fallback || "";
     art.src = item.art || item.fallback || "/static/cover-placeholder.svg";
     audio.dataset.trackId = item.id;
+    document.querySelector(".expand-player").disabled = false;
+    paintFullscreen();
     audio.src = `/stream?id=${encodeURIComponent(item.id)}&q=${encodeURIComponent(quality.value)}`;
     audio.load();
     paintTracks();
+    loadLyrics();
     try {
       await audio.play();
     } catch (err) {
@@ -96,6 +175,7 @@
       id: node.dataset.id,
       name: node.dataset.name,
       artist: node.dataset.artist,
+      album: node.dataset.album,
       art: node.dataset.art,
       fallback: node.dataset.fallback,
     }));
@@ -160,6 +240,12 @@
       history.back();
     } else if (action === "forward") {
       history.forward();
+    } else if (action === "expand-player" && currentTrack()) {
+      paintFullscreen();
+      fullscreen.showModal();
+      loadLyrics();
+    } else if (action === "close-player") {
+      fullscreen.close();
     }
   });
 
@@ -212,15 +298,19 @@
     paintPlayer();
     document.querySelector("#elapsed").textContent = timeLabel(audio.currentTime);
     document.querySelector("#remaining").textContent = timeLabel(audio.duration);
-    if (Number.isFinite(audio.duration) && audio.duration > 0 && !seek.matches(":active")) {
-      seek.value = String(Math.round(audio.currentTime / audio.duration * Number(seek.max)));
-    }
+    document.querySelector("#fullscreen-elapsed").textContent = timeLabel(audio.currentTime);
+    document.querySelector("#fullscreen-duration").textContent = timeLabel(audio.duration);
+    seeks.forEach(range => {
+      if (Number.isFinite(audio.duration) && audio.duration > 0 && !range.matches(":active")) {
+        range.value = String(Math.round(audio.currentTime / audio.duration * Number(range.max)));
+      }
+    });
   });
-  seek.addEventListener("input", () => {
+  seeks.forEach(range => range.addEventListener("input", () => {
     if (Number.isFinite(audio.duration) && audio.duration > 0) {
-      audio.currentTime = Number(seek.value) / Number(seek.max) * audio.duration;
+      audio.currentTime = Number(range.value) / Number(range.max) * audio.duration;
     }
-  });
+  }));
   volume.addEventListener("input", () => {
     audio.volume = Number(volume.value);
     try { localStorage.setItem("flac_dl_volume", volume.value); } catch {}

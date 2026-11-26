@@ -175,6 +175,9 @@ kbd { padding: 2px 4px; border: 1px solid #333; border-radius: 4px; font: inheri
 .player-track { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .player-art-wrap { width: 54px; height: 54px; flex: 0 0 54px; }
 .player-art-wrap img { width: 100%; height: 100%; border-radius: 4px; object-fit: cover; background: #222; }
+.expand-player { padding: 0; border: 0; border-radius: 4px; background: transparent; }
+.expand-player:not(:disabled):hover { outline: 1px solid #aaa; outline-offset: 3px; }
+.expand-player:disabled { cursor: default; }
 .player-track-copy { display: grid; gap: 5px; min-width: 0; }
 .player-track-copy strong, .player-track-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-track-copy strong { font-size: 13px; font-weight: 500; }
@@ -195,6 +198,29 @@ input[type="range"] { min-width: 0; height: 4px; margin: 0; accent-color: #ddd; 
 .volume-icon { width: 19px; height: 19px; color: #999; }
 #volume { width: 65px; }
 #audio { display: none; }
+body:has(.fullscreen-player[open]) { overflow: hidden; }
+.fullscreen-player { position: fixed; inset: 0; width: 100%; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 28px clamp(24px,5vw,80px); border: 0; color: #eee; background: #090909; overflow-y: auto; overscroll-behavior: contain; isolation: isolate; }
+.fullscreen-player::backdrop { background: #090909; }
+.fullscreen-player::before { content: ""; position: fixed; inset: -60px; z-index: -1; background: var(--cover-image, none) center / cover; filter: blur(90px); opacity: .2; pointer-events: none; }
+.fullscreen-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+.fullscreen-header > span { color: #aaa; font-size: 10px; font-weight: 600; letter-spacing: 1.6px; }
+.fullscreen-header .icon-action { width: 42px; height: 42px; font-size: 30px; }
+.fullscreen-layout { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); align-items: center; gap: clamp(32px,7vw,120px); max-width: 1250px; margin: 0 auto; min-height: calc(100dvh - 155px); }
+.fullscreen-music { min-width: 0; width: 100%; max-width: 530px; justify-self: center; }
+.fullscreen-artwork { display: block; aspect-ratio: 1; width: min(100%,50dvh); margin: 0 auto 25px; border-radius: 9px; background: #191919; object-fit: cover; box-shadow: 0 20px 65px #0007; }
+.fullscreen-music h2 { margin: 0 0 8px; font-size: clamp(23px,2.5vw,34px); line-height: 1.2; letter-spacing: -.7px; overflow-wrap: anywhere; }
+.fullscreen-music > p { margin-bottom: 25px; color: #aaa; font-size: 16px; }
+.fullscreen-timeline { margin-bottom: 22px; font-size: 11px; }
+#fullscreen-seek { width: 100%; }
+.fullscreen-controls { gap: 28px; padding-bottom: 10px; }
+.fullscreen-controls .transport-button { width: 44px; height: 44px; }
+.fullscreen-controls .play-toggle { width: 60px; height: 60px; font-size: 23px; }
+.fullscreen-lyrics { min-width: 0; align-self: stretch; display: flex; flex-direction: column; padding: 22px 0; }
+.lyrics-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding-bottom: 18px; border-bottom: 1px solid #ffffff24; }
+.lyrics-heading h3 { margin: 0; font-size: 15px; font-weight: 500; }
+.lyrics-heading a { color: #999; font-size: 11px; }
+.lyrics-heading a:hover { color: #eee; }
+#lyrics-content { max-height: calc(100dvh - 240px); margin: 25px 0 0; padding-right: 16px; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: #d2d2d2; font-size: clamp(19px,2.3vw,29px); font-weight: 600; line-height: 1.65; scrollbar-width: thin; scrollbar-color: #555 transparent; }
 @media (max-width: 1100px) {
   .topbar { flex-wrap: wrap; gap: 10px; }
   .topbar-options { width: 100%; padding-left: 90px; }
@@ -205,6 +231,12 @@ input[type="range"] { min-width: 0; height: 4px; margin: 0; accent-color: #ddd; 
   #volume { width: 50px; }
 }
 @media (max-width: 780px) {
+  .fullscreen-player { padding: 16px 22px calc(22px + env(safe-area-inset-bottom)); }
+  .fullscreen-layout { grid-template-columns: minmax(0,1fr); gap: 25px; min-height: 0; }
+  .fullscreen-header { margin-bottom: 20px; }
+  .fullscreen-artwork { width: min(100%,40dvh); }
+  .fullscreen-lyrics { padding: 5px 0; }
+  #lyrics-content { max-height: none; overflow: visible; padding-right: 0; font-size: 22px; }
   .app-shell { display: block; }
   .sidebar { position: sticky; inset: 0 0 auto; width: 100%; height: 58px; flex-direction: row; align-items: center; gap: 24px; padding: 0 18px; border-right: 0; border-bottom: 1px solid #292929; }
   .brand { margin: 0; }
