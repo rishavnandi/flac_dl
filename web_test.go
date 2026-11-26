@@ -52,6 +52,9 @@ func TestWebChartsAndStaticAssets(t *testing.T) {
 	if !strings.Contains(res.Body.String(), `id="player-title" data-action="expand-player" aria-haspopup="dialog"`) {
 		t.Fatal("player title does not open the full-screen dialog")
 	}
+	if strings.Count(res.Body.String(), `class="play-icon"`) != 2 || strings.Count(res.Body.String(), `class="pause-icon"`) != 2 {
+		t.Fatal("dock and full-screen controls must both render SVG play/pause icons")
+	}
 	for _, want := range []string{"Discover", "Test Song", "https://is.example/test/600x600bb.jpg", "/static/site.css", `id="player-dock" class="player-dock" hx-preserve`, `class="brand" href="/" hx-get="/" hx-target="#view" hx-push-url="true"`, `id="view" class="view" hx-history-elt`, `id="fullscreen-player"`, `aria-label="Open full-screen player"`} {
 		if !strings.Contains(res.Body.String(), want) {
 			t.Errorf("home page missing %q", want)

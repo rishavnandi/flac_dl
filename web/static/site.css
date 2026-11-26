@@ -193,7 +193,9 @@ kbd { padding: 2px 4px; border: 1px solid #333; border-radius: 4px; font: inheri
 .transport-button { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; background: transparent; color: #aaa; }
 .transport-button:hover { color: #fff; }
 .transport-button svg { width: 22px; height: 22px; }
-.play-toggle { position: relative; width: 36px; height: 36px; padding-left: 2px; border-radius: 50%; color: #111; background: #eee; font-size: 14px; }
+.play-toggle { position: relative; width: 36px; height: 36px; border-radius: 50%; color: #111; background: #eee; }
+.play-toggle svg { width: 18px; height: 18px; fill: currentColor; stroke: none; }
+.play-toggle[aria-pressed="true"] .play-icon, .play-toggle:not([aria-pressed="true"]) .pause-icon { display: none; }
 .play-toggle:hover { color: #111; background: #fff; }
 .track-play.is-loading, .play-toggle.is-loading { color: transparent; }
 .track-play.is-loading::after, .play-toggle.is-loading::after { content: ""; position: absolute; top: 50%; left: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border: 2px solid #ffffff50; border-top-color: #fff; border-radius: 50%; animation: player-spin .8s linear infinite; }
@@ -224,7 +226,8 @@ body:has(.fullscreen-player[open]) { overflow: hidden; }
 #fullscreen-seek { width: 100%; }
 .fullscreen-controls { gap: 28px; padding-bottom: 10px; }
 .fullscreen-controls .transport-button { width: 44px; height: 44px; }
-.fullscreen-controls .play-toggle { width: 60px; height: 60px; font-size: 23px; }
+.fullscreen-controls .play-toggle { width: 60px; height: 60px; }
+.fullscreen-controls .play-toggle svg { width: 26px; height: 26px; }
 .fullscreen-lyrics { min-width: 0; align-self: stretch; display: flex; flex-direction: column; padding: 22px 0; }
 .lyrics-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding-bottom: 18px; border-bottom: 1px solid #ffffff24; }
 .lyrics-heading h3 { margin: 0; font-size: 15px; font-weight: 500; }
@@ -327,7 +330,7 @@ body:has(.fullscreen-player[open]) { overflow: hidden; }
   .album-actions { margin-top: 16px; gap: 7px; }
   .player-controls { gap: 3px; }
   .transport-button { width: 28px; height: 34px; }
-  .play-toggle { width: 34px; }
+  .play-toggle { width: 34px; height: 34px; }
   .player-timeline { grid-template-columns: 27px minmax(20px,1fr) 27px; font-size: 9px; }
   .player-track { gap: 10px; }
   #player-title { font-size: 12px; }

@@ -108,6 +108,18 @@ test("volume persists, validates saved values, and accepts mute", () => {
   }
 });
 
+test("play and pause updates preserve the centered SVG controls", () => {
+  const { click, node } = app();
+  const icon = node(".test-play-pause-svg");
+  node("#player-toggle").append(icon);
+  click("play");
+  expect(node("#player-toggle").children[0]).toBe(icon);
+  expect(node("#player-toggle").attributes["aria-pressed"]).toBe("true");
+  click("play");
+  expect(node("#player-toggle").children[0]).toBe(icon);
+  expect(node("#player-toggle").attributes["aria-pressed"]).toBe("false");
+});
+
 test("song titles and cover controls share playback and preserve position when toggling", async () => {
   const { click, audio, node } = app();
   click("play-title");

@@ -49,7 +49,6 @@
     const playing = !audio.paused && !audio.ended && !audio.error;
     const loading = playing && audio.readyState < audio.HAVE_FUTURE_DATA;
     toggles.forEach(button => {
-      button.textContent = playing ? "Ⅱ" : "▶";
       button.setAttribute("aria-label", playing ? "Pause" : "Play");
       button.setAttribute("aria-pressed", String(playing));
       button.setAttribute("aria-busy", String(loading));
