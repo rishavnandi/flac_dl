@@ -432,3 +432,42 @@ test("returning to a track reuses successful lyrics without another lookup", asy
   expect(node("#lyrics-content").textContent).toBe("Lyrics 1");
   expect(calls).toBe(2);
 });
+
+test("lyric buttons seek while preserving play/pause and ignore removed lines", async () => {
+  const { click, audio, node, track } = app({}, {
+    fetch: async () => ({
+      ok: true,
+      json: async () => ({ syncedLyrics: "[00:01]First\n[00:05.50]Second\n[02:00]Beyond duration" }),
+    }),
+  });
+  audio.duration = 100;
+  click("play");
+  click("expand-player");
+  await settle();
+  const content = node("#lyrics-content");
+  const second = content.children[1];
+  expect(second.type).toBe("button");
+  const tap = line => content.emit("click", { target: { closest: () => line } });
+  tap(second);
+  expect(audio.currentTime).toBe(5.5);
+  expect(audio.paused).toBe(false);
+  expect(second.attributes["aria-current"]).toBe("true");
+  audio.pause();
+  tap(content.children[0]);
+  expect(audio.currentTime).toBe(1);
+  expect(audio.paused).toBe(true);
+  tap(content.children[2]);
+  expect(audio.currentTime).toBe(100);
+  audio.duration = NaN;
+  tap(second);
+  expect(audio.currentTime).toBe(100);
+  audio.duration = 100;
+  track.dataset = { id: "43", name: "Next song" };
+  click("play");
+  audio.currentTime = 0;
+  tap(second);
+  expect(audio.currentTime).toBe(0);
+  await settle();
+  tap(second);
+  expect(audio.currentTime).toBe(0);
+});

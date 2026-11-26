@@ -169,14 +169,24 @@
     }
     lyricsContent.classList.add("is-synced");
     lyricLines = timed.map(line => {
-      const element = document.createElement("span");
+      const element = document.createElement("button");
+      element.type = "button";
       element.className = "lyric-line";
+      element.title = `Seek to ${timeLabel(line.time)}`;
       element.textContent = line.text || "♪";
       lyricsContent.append(element);
       return { time: line.time, element };
     });
     paintLyrics();
   };
+
+  lyricsContent.addEventListener("click", (event) => {
+    const target = event.target.closest(".lyric-line");
+    const line = lyricLines.find(line => line.element === target);
+    if (!line || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+    audio.currentTime = Math.min(line.time, audio.duration);
+    paintLyrics();
+  });
 
   const loadLyrics = async () => {
     const item = currentTrack();

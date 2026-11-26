@@ -76,7 +76,9 @@ returns to browsing without stopping playback. Lyrics appear on the right
 (below the player on mobile) when available from [LRCLIB](https://lrclib.net).
 They load only when the view is opened and use no API key. Timestamped lyrics
 highlight the current line and follow playback and seeks inside the lyrics
-pane. Tracks without timestamps use plain text. The lookup sends track
+pane. Tap a timestamped line (or use Enter/Space while it is focused) to seek
+to that line without changing play/pause state. Tracks without timestamps use
+plain text. The lookup sends track
 metadata directly to LRCLIB and respects its retry limits.
 
 The upstream can return a short spoken notice instead of the requested song,
