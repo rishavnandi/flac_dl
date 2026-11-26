@@ -37,7 +37,9 @@ Album pages include the full track list, play-all and album download actions.
 
 Chart navigation uses cached feeds and refreshes them in the background after
 15 minutes. Apple outages keep the last good chart visible. The disk cache
-survives service restarts. A new installation still needs one successful fetch.
+survives service restarts. Fresh instances use bundled chart snapshots immediately,
+so even a cold start does not wait for Apple. The page shows the feed's update date.
+Snapshots in `charts/` are fallback data, not a guarantee of current rankings.
 
 Use the bottom player for play/pause, track navigation, seeking and volume.
 Choose Auto, FLAC, 320 kbps or 128 kbps from the quality menu. Auto prefers

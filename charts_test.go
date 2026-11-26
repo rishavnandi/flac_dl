@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -154,5 +156,77 @@ func TestAppleChartClientRejectsUnknownKind(t *testing.T) {
 	c := &appleChartClient{base: "://bad", http: http.DefaultClient}
 	if _, err := c.fetch("artists"); err == nil {
 		t.Fatal("expected unsupported chart error")
+	}
+}
+
+func TestColdChartNavigationDoesNotWaitForApple(t *testing.T) {
+	t.Setenv("VERCEL", "1")
+	// No disk cache or warm process. Apple never sends response headers.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+	for _, kind := range []string{"songs", "albums"} {
+		t.Run(kind, func(t *testing.T) {
+			c := newAppleChartClient()
+			c.base = server.URL
+			c.http = &http.Client{Timeout: 300 * time.Millisecond}
+			app, err := newWebApp(newClient(), c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			req := webTestRequest(http.MethodGet, "/charts/"+kind, nil).WithContext(ctx)
+			req.Header.Set("HX-Request", "true")
+			res := httptest.NewRecorder()
+			app.handler().ServeHTTP(res, req)
+			body := res.Body.String()
+			marker := `class="chart-row-title"`
+			if kind == "albums" {
+				marker = `class="album-card-title"`
+			}
+			if res.Code != http.StatusOK || strings.Count(body, marker) != 20 || ctx.Err() != nil {
+				t.Fatalf("cold navigation waited for Apple or lost chart entries: status %d, entries %d, context %v",
+					res.Code, strings.Count(body, marker), ctx.Err())
+			}
+			if !strings.Contains(html.UnescapeString(body), "Chart updated "+c.fallback[kind].Updated) {
+				t.Fatal("fallback feed date is not visible")
+			}
+			c.mu.Lock()
+			pending := c.cache[kind].pending
+			c.mu.Unlock()
+			<-pending
+			feed, err := c.cachedFetchContext(context.Background(), kind)
+			if err != nil || len(feed.Results) != 20 {
+				t.Fatalf("Apple timeout discarded the bundled feed: %v", err)
+			}
+		})
+	}
+}
+
+func TestColdChartFallbackIsReplacedByLiveFeed(t *testing.T) {
+	t.Setenv("VERCEL", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(appleChartResponse{Feed: appleChartFeed{
+			Title: "Live chart", Results: []appleChartItem{{Name: "New song"}},
+		}})
+	}))
+	defer server.Close()
+	c := newAppleChartClient()
+	c.base, c.http = server.URL, server.Client()
+	feed, err := c.cachedFetchContext(context.Background(), "songs")
+	if err != nil || len(feed.Results) != 20 {
+		t.Fatalf("missing initial fallback: %v", err)
+	}
+	c.mu.Lock()
+	pending := c.cache["songs"].pending
+	c.mu.Unlock()
+	if pending != nil {
+		<-pending
+	}
+	feed, err = c.cachedFetchContext(context.Background(), "songs")
+	if err != nil || feed.Title != "Live chart" {
+		t.Fatalf("background refresh did not replace fallback: %#v, %v", feed, err)
 	}
 }

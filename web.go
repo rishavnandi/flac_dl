@@ -227,7 +227,7 @@ func (a *webApp) renderChart(w http.ResponseWriter, r *http.Request, kind string
 	view := webView{
 		Title:       "US Top " + kind,
 		Eyebrow:     "APPLE MUSIC · UNITED STATES",
-		Description: "The latest chart, ready to explore on Kuwo.",
+		Description: "Chart updated " + feed.Updated + " · Explore on Kuwo.",
 		ChartKind:   kind,
 		Charts:      items,
 	}

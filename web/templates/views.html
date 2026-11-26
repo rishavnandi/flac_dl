@@ -3,7 +3,7 @@
   <div>
     <p class="eyebrow">{{.Eyebrow}}</p>
     <h1>{{if eq .ChartKind "albums"}}Top albums{{else}}Discover{{end}}</h1>
-    <p class="view-description">The most-played music in the United States.</p>
+    <p class="view-description">{{.Description}}</p>
   </div>
   <div class="chart-tabs" role="tablist" aria-label="Apple Music charts">
     <a href="/charts/songs" hx-get="/charts/songs" hx-target="#view" hx-push-url="true" role="tab" aria-selected="{{if eq .ChartKind "songs"}}true{{else}}false{{end}}" class="{{if eq .ChartKind "songs"}}selected{{end}}">Songs</a>

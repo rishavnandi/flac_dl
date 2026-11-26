@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,12 +16,16 @@ import (
 	"time"
 )
 
+//go:embed charts/*.json
+var bundledCharts embed.FS
+
 type appleChartClient struct {
 	base     string
 	http     *http.Client
 	cacheDir string
 	mu       sync.Mutex
 	cache    map[string]*appleChartCache
+	fallback map[string]appleChartFeed
 }
 
 type appleChartCache struct {
@@ -57,11 +63,24 @@ func newAppleChartClient() *appleChartClient {
 	if os.Getenv("VERCEL") == "1" {
 		dir = ""
 	}
-	return &appleChartClient{
+	c := &appleChartClient{
 		base:     "https://rss.applemarketingtools.com/api/v2/us/music/most-played/20",
 		http:     &http.Client{Timeout: 12 * time.Second},
 		cacheDir: dir,
+		fallback: make(map[string]appleChartFeed),
 	}
+	for _, kind := range []string{"songs", "albums"} {
+		data, err := bundledCharts.ReadFile("charts/" + kind + ".json")
+		if err != nil {
+			panic(err)
+		}
+		feed, err := decodeAppleChart(bytes.NewReader(data))
+		if err != nil {
+			panic(err)
+		}
+		c.fallback[kind] = feed
+	}
+	return c
 }
 
 // Web navigation serves the last good feed while one background request refreshes it.
@@ -75,7 +94,7 @@ func (c *appleChartClient) cachedFetchContext(ctx context.Context, kind string) 
 	}
 	entry := c.cache[kind]
 	if entry == nil {
-		entry = &appleChartCache{}
+		entry = &appleChartCache{feed: c.fallback[kind]}
 		if c.cacheDir != "" {
 			if f, err := os.Open(filepath.Join(c.cacheDir, kind+".json")); err == nil {
 				if feed, err := decodeAppleChart(f); err == nil {
