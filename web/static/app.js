@@ -255,6 +255,7 @@
       setLyricsMessage("Lyrics appear here when available.");
     }
     document.querySelector("#player-title").textContent = item.name || "Unknown track";
+    document.querySelector("#player-title").disabled = false;
     document.querySelector("#player-artist").textContent = item.artist || "Kuwo";
     const art = document.querySelector("#player-art");
     art.closest(".player-dock").style.removeProperty("--cover-image");

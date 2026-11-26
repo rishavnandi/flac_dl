@@ -113,6 +113,7 @@ test("song titles and cover controls share playback and preserve position when t
   click("play-title");
   await settle();
   expect(audio.dataset.trackId).toBe("42");
+  expect(node("#player-title").disabled).toBe(false);
   expect(audio.paused).toBe(false);
   expect(node(".test-title").attributes["aria-label"]).toBe("Pause Test Song");
   audio.currentTime = 27;

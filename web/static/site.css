@@ -183,8 +183,10 @@ kbd { padding: 2px 4px; border: 1px solid #333; border-radius: 4px; font: inheri
 .expand-player:not(:disabled):hover { outline: 1px solid #aaa; outline-offset: 3px; }
 .expand-player:disabled { cursor: default; }
 .player-track-copy { display: grid; gap: 5px; min-width: 0; }
-.player-track-copy strong, .player-track-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.player-track-copy strong { font-size: 13px; font-weight: 500; }
+.player-track-copy button, .player-track-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#player-title { max-width: 100%; padding: 0; border: 0; background: transparent; font-size: 13px; font-weight: 500; text-align: left; }
+#player-title:not(:disabled):hover { text-decoration: underline; text-underline-offset: 3px; }
+#player-title:disabled { cursor: default; }
 .player-track-copy span { color: #999; font-size: 11px; }
 .player-main { display: flex; flex-direction: column-reverse; gap: 10px; }
 .player-controls { display: flex; align-items: center; justify-content: center; gap: 22px; }
@@ -328,7 +330,7 @@ body:has(.fullscreen-player[open]) { overflow: hidden; }
   .play-toggle { width: 34px; }
   .player-timeline { grid-template-columns: 27px minmax(20px,1fr) 27px; font-size: 9px; }
   .player-track { gap: 10px; }
-  .player-track-copy strong { font-size: 12px; }
+  #player-title { font-size: 12px; }
   .player-track-copy span { font-size: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {

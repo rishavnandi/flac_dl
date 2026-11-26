@@ -49,6 +49,9 @@ func TestWebChartsAndStaticAssets(t *testing.T) {
 	if res.Code != http.StatusOK {
 		t.Fatalf("home status = %d", res.Code)
 	}
+	if !strings.Contains(res.Body.String(), `id="player-title" data-action="expand-player" aria-haspopup="dialog"`) {
+		t.Fatal("player title does not open the full-screen dialog")
+	}
 	for _, want := range []string{"Discover", "Test Song", "https://is.example/test/600x600bb.jpg", "/static/site.css", `id="player-dock" class="player-dock" hx-preserve`, `class="brand" href="/" hx-get="/" hx-target="#view" hx-push-url="true"`, `id="view" class="view" hx-history-elt`, `id="fullscreen-player"`, `aria-label="Open full-screen player"`} {
 		if !strings.Contains(res.Body.String(), want) {
 			t.Errorf("home page missing %q", want)
