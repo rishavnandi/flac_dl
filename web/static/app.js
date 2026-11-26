@@ -46,21 +46,33 @@
   };
 
   const paintPlayer = () => {
-    const playing = !audio.paused;
+    const playing = !audio.paused && !audio.ended && !audio.error;
+    const loading = playing && audio.readyState < audio.HAVE_FUTURE_DATA;
     toggles.forEach(button => {
       button.textContent = playing ? "Ⅱ" : "▶";
       button.setAttribute("aria-label", playing ? "Pause" : "Play");
+      button.setAttribute("aria-pressed", String(playing));
+      button.setAttribute("aria-busy", String(loading));
+      button.classList.toggle("is-loading", loading);
     });
-    document.querySelector("#stream-quality").textContent = audio.dataset.trackId ? quality.value.toUpperCase() : "READY";
+    document.querySelector("#stream-quality").textContent = loading ? "LOADING" : audio.dataset.trackId ? quality.value.toUpperCase() : "READY";
   };
 
   const paintTracks = () => {
     document.querySelectorAll("#view .play-track").forEach((button) => {
       const current = button.dataset.id === audio.dataset.trackId;
-      const playing = current && !audio.paused;
-      button.closest(".track-row").classList.toggle("is-current", current);
+      const playing = current && !audio.paused && !audio.ended && !audio.error;
+      const row = button.closest(".track-row");
+      row.classList.toggle("is-current", current);
+      button.classList.toggle("is-loading", playing && audio.readyState < audio.HAVE_FUTURE_DATA);
+      button.setAttribute("aria-busy", String(playing && audio.readyState < audio.HAVE_FUTURE_DATA));
       button.textContent = playing ? "Ⅱ" : "▶";
-      button.setAttribute("aria-label", `${playing ? "Pause" : "Play"} ${button.dataset.name}`);
+      const label = `${playing ? "Pause" : "Play"} ${button.dataset.name}`;
+      button.setAttribute("aria-label", label);
+      button.setAttribute("aria-pressed", String(playing));
+      const title = row.querySelector(".track-title");
+      title?.setAttribute("aria-label", label);
+      title?.setAttribute("aria-pressed", String(playing));
     });
   };
 
@@ -249,7 +261,9 @@
     try {
       await audio.play();
     } catch (err) {
-      showToast(`Could not start playback: ${err.message || "stream unavailable"}`);
+      if (audio.dataset.trackId === item.id && err.name !== "AbortError") {
+        showToast(`Could not start playback: ${err.message || "stream unavailable"}`);
+      }
     }
     paintPlayer();
   };
@@ -281,7 +295,8 @@
       download.href = url.href;
       return;
     }
-    const playButton = event.target.closest('[data-action="play"]');
+    const playButton = event.target.closest('[data-action="play"]') ||
+      event.target.closest('[data-action="play-title"]')?.closest(".track-row")?.querySelector(".play-track");
     if (playButton) {
       event.preventDefault();
       if (audio.dataset.trackId === playButton.dataset.id) {
@@ -367,18 +382,23 @@
     if (event.target instanceof HTMLImageElement) tintArtwork(event.target);
   }, true);
 
-  audio.addEventListener("play", paintPlayer);
-  audio.addEventListener("playing", paintPlayer);
-  audio.addEventListener("pause", paintPlayer);
-  audio.addEventListener("play", paintTracks);
-  audio.addEventListener("pause", paintTracks);
+  for (const event of ["play", "playing", "pause", "waiting", "canplay", "emptied"]) {
+    audio.addEventListener(event, () => {
+      paintPlayer();
+      paintTracks();
+    });
+  }
   audio.addEventListener("ended", () => {
     if (state.index >= 0 && state.index < state.queue.length - 1) playRelative(1);
-    else paintPlayer();
+    else {
+      paintPlayer();
+      paintTracks();
+    }
   });
   audio.addEventListener("error", () => {
     if (audio.dataset.trackId) showToast("This stream could not be loaded. Try another quality or result.");
     paintPlayer();
+    paintTracks();
   });
   audio.addEventListener("timeupdate", () => {
     paintPlayer();
@@ -399,8 +419,14 @@
       paintLyrics();
     }
   }));
+  const paintVolume = () => {
+    const percent = `${Math.round(audio.volume * 100)}%`;
+    volume.title = percent;
+    volume.setAttribute("aria-valuetext", percent);
+  };
   volume.addEventListener("input", () => {
     audio.volume = Number(volume.value);
+    paintVolume();
     try { localStorage.setItem("flac_dl_volume", volume.value); } catch {}
   });
   audio.volume = Number(volume.value);
@@ -425,6 +451,7 @@
       volume.value = String(audio.volume);
     }
   } catch {}
+  paintVolume();
 
   document.body.addEventListener("htmx:responseError", () => showToast("That request failed. Please try again."));
   document.body.addEventListener("htmx:sendError", () => showToast("Connection lost. Check that flac_dl is still running."));

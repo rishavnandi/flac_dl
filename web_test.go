@@ -96,6 +96,9 @@ func TestWebSearchEscapesTrackMetadata(t *testing.T) {
 	if !strings.Contains(body, `data-fallback="/artwork?`) {
 		t.Fatal("track artwork fallback was not rendered")
 	}
+	if !strings.Contains(body, `class="track-title" data-action="play-title"`) {
+		t.Fatal("song titles are not keyboard-accessible playback buttons")
+	}
 }
 
 func TestWebStreamResolvesAndRedirects(t *testing.T) {

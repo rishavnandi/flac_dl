@@ -26,6 +26,7 @@ function app(saved = {}, options = {}) {
     removeAttribute(name) { delete this.attributes[name]; },
     matches() { return false; },
     closest() { return null; },
+    querySelector() { return null; },
     focus() { this.focused = true; },
     select() { this.selected = true; },
     showModal() { this.open = true; },
@@ -47,6 +48,8 @@ function app(saved = {}, options = {}) {
   };
   const audio = node("#audio");
   audio.paused = true;
+  audio.readyState = 4;
+  audio.HAVE_FUTURE_DATA = 3;
   audio.play = async () => { audio.paused = false; audio.emit("play"); };
   audio.pause = () => { audio.paused = true; audio.emit("pause"); };
   audio.load = () => {};
@@ -54,9 +57,12 @@ function app(saved = {}, options = {}) {
   node("#seek").max = node("#fullscreen-seek").max = "1000";
   node("#quality").options = [{ value: "auto" }, { value: "flac" }];
   node("#quality").value = "auto";
+  node("#volume").value = "1";
   const track = node(".test-track");
   track.dataset = { id: "42", name: "Test Song" };
   track.closest = () => node(".test-row");
+  node(".test-title").closest = () => node(".test-row");
+  node(".test-row").querySelector = selector => selector === ".play-track" ? track : selector === ".track-title" ? node(".test-title") : null;
   const nav = [node(".home"), node(".albums")];
   nav[0].attributes.href = "/charts/songs";
   nav[1].attributes.href = "/charts/albums";
@@ -81,6 +87,7 @@ function app(saved = {}, options = {}) {
   const click = action => document.emit("click", {
     target: {
       closest: selector => selector === '[data-action="play"]' && action === "play" ? track :
+        selector === '[data-action="play-title"]' && action === "play-title" ? node(".test-title") :
         selector === "[data-action]" ? { dataset: { action } } : null,
     },
     preventDefault() {},
@@ -89,14 +96,71 @@ function app(saved = {}, options = {}) {
 }
 
 test("volume persists, validates saved values, and accepts mute", () => {
-  for (const [saved, expected] of [["0", 0], ["0.4", 0.4], ["3", 1], ["-1", 0], ["bad", 0.8], ["", 0.8]]) {
+  expect(app().audio.volume).toBe(1);
+  for (const [saved, expected] of [["0", 0], ["0.4", 0.4], ["3", 1], ["-1", 0], ["bad", 1], ["", 1]]) {
     const { audio, node, storage } = app({ flac_dl_volume: saved });
     expect(audio.volume).toBe(expected);
     node("#volume").value = "0.25";
     node("#volume").emit("input");
     expect(audio.volume).toBe(0.25);
     expect(storage.get("flac_dl_volume")).toBe("0.25");
+    expect(node("#volume").attributes["aria-valuetext"]).toBe("25%");
   }
+});
+
+test("song titles and cover controls share playback and preserve position when toggling", async () => {
+  const { click, audio, node } = app();
+  click("play-title");
+  await settle();
+  expect(audio.dataset.trackId).toBe("42");
+  expect(audio.paused).toBe(false);
+  expect(node(".test-title").attributes["aria-label"]).toBe("Pause Test Song");
+  audio.currentTime = 27;
+  click("play");
+  expect(audio.paused).toBe(true);
+  expect(node(".test-title").attributes["aria-pressed"]).toBe("false");
+  click("play-title");
+  await settle();
+  expect(audio.paused).toBe(false);
+  expect(audio.currentTime).toBe(27);
+});
+
+test("buffering feedback clears on playback, pause and stream errors", async () => {
+  const { click, audio, node, track } = app();
+  audio.readyState = 0;
+  click("play-title");
+  await settle();
+  expect(node("#player-toggle").classes.has("is-loading")).toBe(true);
+  expect(track.attributes["aria-busy"]).toBe("true");
+  expect(node("#stream-quality").textContent).toBe("LOADING");
+  audio.readyState = 4;
+  audio.emit("playing");
+  expect(track.classes.has("is-loading")).toBe(false);
+  expect(node("#player-toggle").attributes["aria-busy"]).toBe("false");
+  audio.readyState = 1;
+  audio.emit("waiting");
+  expect(track.classes.has("is-loading")).toBe(true);
+  click("play-title");
+  expect(track.classes.has("is-loading")).toBe(false);
+  click("play-title");
+  audio.error = { code: 2 };
+  audio.emit("error");
+  expect(track.classes.has("is-loading")).toBe(false);
+  expect(node("#player-toggle").classes.has("is-loading")).toBe(false);
+});
+
+test("switching tracks while one loads does not report a stale playback error", async () => {
+  const { click, audio, track, node } = app();
+  let rejectFirst;
+  audio.play = () => new Promise((_, reject) => { rejectFirst = reject; });
+  click("play");
+  track.dataset = { id: "43", name: "New song" };
+  audio.play = async () => { audio.paused = false; audio.emit("play"); };
+  click("play");
+  rejectFirst(new Error("old stream failed"));
+  await settle();
+  expect(audio.dataset.trackId).toBe("43");
+  expect(node("#toast").textContent).toBe("");
 });
 
 test("history restoration syncs navigation and track state without touching audio", () => {

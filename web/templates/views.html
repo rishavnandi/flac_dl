@@ -110,7 +110,7 @@
     {{else}}
       <div class="track-art track-art-placeholder">♫</div>
     {{end}}
-    <div class="track-copy"><div class="track-title-line"><strong title="{{.Name}}">{{.Name}}</strong>{{if .Quality}}<span class="quality-badge">{{.Quality}}</span>{{end}}</div><span title="{{.Artist}}">{{.Artist}}</span></div>
+    <div class="track-copy"><div class="track-title-line"><button type="button" class="track-title" data-action="play-title" title="{{.Name}}" aria-label="Play {{.Name}}">{{.Name}}</button>{{if .Quality}}<span class="quality-badge">{{.Quality}}</span>{{end}}</div><span title="{{.Artist}}">{{.Artist}}</span></div>
   </div>
   <div class="track-album">
     {{if .AlbumURL}}<a href="{{.AlbumURL}}" hx-get="{{.AlbumURL}}" hx-target="#view" hx-push-url="true">{{.AlbumName}}</a>{{else}}{{.AlbumName}}{{end}}

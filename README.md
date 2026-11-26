@@ -51,6 +51,10 @@ Versioned CSS and JavaScript use immutable browser caching. Successful lyrics
 lookups are reused for a day in the current tab (up to 64 tracks).
 
 Use the bottom player for play/pause, track navigation, seeking and volume.
+Click or tap a song's title or cover to play it, then use either to pause or
+resume without restarting. Cover controls appear on hover, keyboard focus or
+the selected track, with a loading indicator while audio buffers. Album names
+remain navigation links. Volume starts at 100% unless you saved another level.
 Choose Auto, FLAC, 320 kbps or 128 kbps from the quality menu. Auto prefers
 FLAC, then 320-kbps MP3, then the last listed format. The player uses the
 browser's audio codecs and device. Local downloads go to `./downloads/`; album
