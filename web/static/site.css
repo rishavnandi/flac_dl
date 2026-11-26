@@ -251,9 +251,8 @@ body:has(.fullscreen-player[open]) { overflow: hidden; }
   .sidebar-divider, .library-note, .sidebar-bottom { display: none; }
   .main { padding: 0 18px calc(155px + env(safe-area-inset-bottom)); }
   .topbar { top: 58px; }
-  .history-controls { gap: 5px; }
-  .history-controls button { width: 29px; height: 29px; }
-  .topbar-options { padding-left: 73px; }
+  .history-controls { display: none; }
+  .topbar-options { padding-left: 0; }
   .search-form { height: 43px; padding-left: 11px; gap: 8px; }
   .search-form input { font-size: 16px; }
   .search-form button { display: none; }
