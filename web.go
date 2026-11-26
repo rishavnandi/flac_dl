@@ -215,7 +215,7 @@ func (a *webApp) renderChart(w http.ResponseWriter, r *http.Request, kind string
 		http.NotFound(w, r)
 		return
 	}
-	feed, err := a.charts.fetchContext(r.Context(), kind)
+	feed, err := a.charts.cachedFetchContext(r.Context(), kind)
 	if err != nil {
 		a.renderError(w, r, "Chart unavailable", err)
 		return
@@ -710,6 +710,13 @@ func runPublicWeb(addr string, hosts []string) error {
 	}
 	if len(app.publicHosts) == 0 {
 		return errors.New("a public hostname is required")
+	}
+	for _, kind := range []string{"songs", "albums"} {
+		go func() {
+			if _, err := app.charts.cachedFetchContext(context.Background(), kind); err != nil {
+				log.Printf("warm Apple chart cache: %v", err)
+			}
+		}()
 	}
 	server := &http.Server{
 		Addr: addr, Handler: app.handler(),

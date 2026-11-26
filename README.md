@@ -1,6 +1,6 @@
 # flac_dl
 
-[Live site](https://flacdl.vercel.app) · [Source](https://github.com/rishavnandi/flac_dl)
+[Live site](https://loki.mist-matrix.ts.net:10000) · [Source](https://github.com/rishavnandi/flac_dl)
 
 A Go music browser and downloader for [flac.music.hi.cn](https://flac.music.hi.cn).
 Browse Apple Music's US charts, search Kuwo, explore albums, stream tracks, and
@@ -34,6 +34,10 @@ The home page shows Apple's US top songs. Switch to the albums chart, or search
 Kuwo from the header. Chart entries open Kuwo search results. Search results
 include cover art, album links, format details, streaming playback and downloads.
 Album pages include the full track list, play-all and album download actions.
+
+Chart navigation uses cached feeds and refreshes them in the background after
+15 minutes. Apple outages keep the last good chart visible. The disk cache
+survives service restarts. A new installation still needs one successful fetch.
 
 Use the bottom player for play/pause, track navigation, seeking and volume.
 Choose Auto, FLAC, 320 kbps or 128 kbps from the quality menu. Auto prefers
