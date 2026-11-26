@@ -13,6 +13,7 @@
   let lyricsTrackID = "";
   let lyricsAbort;
   let lyricsRetryAt = 0;
+  const lyricCache = new Map();
   const lyricsContent = document.querySelector("#lyrics-content");
   let lyricLines = [];
   let lyricIndex = -1;
@@ -171,6 +172,11 @@
     lyricsAbort?.abort();
     lyricsTrackID = item.id;
     lyricsContent.scrollTop = 0;
+    const cached = lyricCache.get(item.id);
+    if (cached && cached.expires > Date.now()) {
+      showLyrics(cached.result);
+      return;
+    }
     if (Date.now() < lyricsRetryAt) {
       lyricsTrackID = "";
       setLyricsMessage("The lyrics service is busy. Please try again later.");
@@ -204,6 +210,12 @@
       if (!response.ok) throw new Error("Lyrics unavailable");
       const result = await response.json();
       if (controller.signal.aborted || audio.dataset.trackId !== item.id) return;
+      if (result?.instrumental || (typeof result?.plainLyrics === "string" && result.plainLyrics.trim()) ||
+          (typeof result?.syncedLyrics === "string" && result.syncedLyrics.trim())) {
+        lyricCache.delete(item.id);
+        if (lyricCache.size >= 64) lyricCache.delete(lyricCache.keys().next().value);
+        lyricCache.set(item.id, { result, expires: Date.now() + 86400000 });
+      }
       showLyrics(result);
     } catch {
       if (!controller.signal.aborted && audio.dataset.trackId === item.id) {

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"embed"
 	"errors"
 	"fmt"
@@ -37,6 +38,7 @@ type webApp struct {
 	views       *template.Template
 	downloads   *webDownloads
 	publicHosts map[string]bool
+	pages       webPageCache
 }
 
 type webPage struct {
@@ -127,8 +129,17 @@ type webDownloads struct {
 }
 
 func newWebApp(c *client, charts *appleChartClient) (*webApp, error) {
+	assets := make(map[string]string)
+	for _, name := range []string{"site.css", "app.js", "htmx.min.js", "cover-placeholder.svg"} {
+		data, err := webFiles.ReadFile("web/static/" + name)
+		if err != nil {
+			return nil, err
+		}
+		assets[name] = fmt.Sprintf("/static/%s?v=%x", name, sha256.Sum256(data))
+	}
 	views, err := template.New("site").Funcs(template.FuncMap{
-		"add": func(a, b int) int { return a + b },
+		"add":   func(a, b int) int { return a + b },
+		"asset": func(name string) string { return assets[name] },
 	}).ParseFS(webFiles, "web/templates/*.html")
 	if err != nil {
 		return nil, err
@@ -145,17 +156,30 @@ func (a *webApp) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", a.home)
 	mux.HandleFunc("GET /charts/{kind}", a.chart)
-	mux.HandleFunc("GET /search", a.search)
-	mux.HandleFunc("GET /album", a.album)
+	mux.HandleFunc("GET /search", a.pages.handler(5*time.Minute, a.search))
+	mux.HandleFunc("GET /album", a.pages.handler(time.Hour, a.album))
 	mux.HandleFunc("GET /stream", a.stream)
-	mux.HandleFunc("GET /artwork", a.artwork)
+	mux.HandleFunc("GET /artwork", a.pages.handler(24*time.Hour, a.artwork))
 	mux.HandleFunc("POST /download", a.download)
 	mux.HandleFunc("GET /download-status", a.downloadStatus)
 	static, err := fs.Sub(webFiles, "web/static")
 	if err != nil {
 		panic(err)
 	}
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(static))))
+	files := http.StripPrefix("/static/", http.FileServer(http.FS(static)))
+	mux.HandleFunc("GET /static/", func(w http.ResponseWriter, r *http.Request) {
+		data, err := webFiles.ReadFile("web" + r.URL.Path)
+		if err == nil {
+			hash := fmt.Sprintf("%x", sha256.Sum256(data))
+			w.Header().Set("ETag", `"`+hash+`"`)
+			if r.URL.Query().Get("v") == hash {
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			} else {
+				w.Header().Set("Cache-Control", "public, max-age=0, must-revalidate")
+			}
+		}
+		files.ServeHTTP(w, r)
+	})
 	return securityHeaders(mux, a.publicHosts)
 }
 
@@ -173,6 +197,7 @@ func securityHeaders(next http.Handler, publicHosts map[string]bool) http.Handle
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' https: data:; media-src 'self' https: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://lrclib.net")
+		w.Header().Set("Cache-Control", "no-store")
 		allowed := isLoopbackHost(r.Host)
 		if publicHosts != nil {
 			allowed = publicHosts[strings.ToLower(r.Host)]
@@ -428,6 +453,7 @@ func (a *webApp) artwork(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	cachePublic(w, 86400)
 	http.Redirect(w, r, art, http.StatusFound)
 }
 
@@ -549,6 +575,19 @@ func (a *webApp) render(w http.ResponseWriter, r *http.Request, page webPage, vi
 	page.View = template.HTML(content.String())
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Add("Vary", "HX-Request")
+	w.Header().Add("Vary", "HX-History-Restore-Request")
+	if viewName == "error" {
+		w.Header().Set("Cache-Control", "no-store")
+	} else if r.Method == http.MethodGet {
+		seconds := 300
+		if viewName == "album" {
+			seconds = 3600
+		}
+		if viewName == "charts" {
+			seconds = 60
+		}
+		cachePublic(w, seconds)
+	}
 	w.WriteHeader(status)
 	name := "layout"
 	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-History-Restore-Request") != "true" {

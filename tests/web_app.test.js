@@ -345,3 +345,26 @@ test("invalid synced lyrics retain the plain-text fallback", async () => {
   expect(node("#lyrics-content").classes.has("is-synced")).toBe(false);
   expect(node("#lyrics-content").textContent).toBe("Plain lyrics");
 });
+
+test("returning to a track reuses successful lyrics without another lookup", async () => {
+  let calls = 0;
+  const { click, track, node } = app({}, {
+    fetch: async () => {
+      calls++;
+      return { ok: true, json: async () => ({ plainLyrics: `Lyrics ${calls}` }) };
+    },
+  });
+  click("play");
+  click("expand-player");
+  await settle();
+  expect(node("#lyrics-content").textContent).toBe("Lyrics 1");
+  track.dataset = { id: "43", name: "Another song" };
+  click("play");
+  await settle();
+  expect(node("#lyrics-content").textContent).toBe("Lyrics 2");
+  track.dataset = { id: "42", name: "Test Song" };
+  click("play");
+  await settle();
+  expect(node("#lyrics-content").textContent).toBe("Lyrics 1");
+  expect(calls).toBe(2);
+});

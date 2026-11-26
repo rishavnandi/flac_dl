@@ -41,6 +41,15 @@ survives service restarts. Fresh instances use bundled chart snapshots immediate
 so even a cold start does not wait for Apple. The page shows the feed's update date.
 Snapshots in `charts/` are fallback data, not a guarantee of current rankings.
 
+Successful pages are cached in the browser and Vercel's CDN: charts for one
+minute, searches for five minutes, albums for one hour, and artwork redirects
+for one day. Search, album and artwork responses also use a bounded server cache
+(128 entries, up to 512 KiB each), with stale responses during background refresh
+for up to another day. Full pages, HTMX fragments and history restores have
+separate cache entries. Errors, audio URLs and downloads are never cached.
+Versioned CSS and JavaScript use immutable browser caching. Successful lyrics
+lookups are reused for a day in the current tab (up to 64 tracks).
+
 Use the bottom player for play/pause, track navigation, seeking and volume.
 Choose Auto, FLAC, 320 kbps or 128 kbps from the quality menu. Auto prefers
 FLAC, then 320-kbps MP3, then the last listed format. The player uses the
