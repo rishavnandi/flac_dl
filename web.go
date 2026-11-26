@@ -694,21 +694,25 @@ func runHostedWeb(port string) error {
 	if port == "" {
 		return errors.New("Vercel did not provide PORT")
 	}
+	return runPublicWeb(":"+port, []string{os.Getenv("VERCEL_URL"), os.Getenv("VERCEL_PROJECT_PRODUCTION_URL")})
+}
+
+func runPublicWeb(addr string, hosts []string) error {
 	app, err := newWebApp(newClient(), newAppleChartClient())
 	if err != nil {
 		return err
 	}
 	app.publicHosts = make(map[string]bool)
-	for _, key := range []string{"VERCEL_URL", "VERCEL_PROJECT_PRODUCTION_URL"} {
-		if host := strings.ToLower(os.Getenv(key)); host != "" {
+	for _, host := range hosts {
+		if host := strings.ToLower(host); host != "" {
 			app.publicHosts[host] = true
 		}
 	}
 	if len(app.publicHosts) == 0 {
-		return errors.New("Vercel did not provide a deployment hostname")
+		return errors.New("a public hostname is required")
 	}
 	server := &http.Server{
-		Addr: ":" + port, Handler: app.handler(),
+		Addr: addr, Handler: app.handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	return server.ListenAndServe()

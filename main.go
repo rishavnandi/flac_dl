@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -32,6 +33,8 @@ func main() {
 	switch os.Args[1] {
 	case "web":
 		err = cmdWeb(os.Args[2:])
+	case "serve":
+		err = cmdServe(os.Args[2:])
 	case "tui":
 		err = runTUI()
 	case "search":
@@ -61,6 +64,7 @@ func usage() {
 usage:
   flac_dl                    open the local web app
   flac_dl web [-addr 127.0.0.1:8765]
+  flac_dl serve -host example.ts.net:10000 [-addr 127.0.0.1:8765]
   flac_dl tui                 open the terminal UI
   flac_dl search <keywords> [-p kuwo|wyy] [-n 20] [--json]
   flac_dl search <keywords> --take 1,4 [-q flac] [-o dir] [--lrc]
@@ -82,6 +86,26 @@ func cmdWeb(args []string) error {
 		return errors.New("usage: flac_dl web [-addr 127.0.0.1:8765]")
 	}
 	return runWeb(*addr)
+}
+
+func cmdServe(args []string) error {
+	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+	addr := fs.String("addr", webDefaultAddr, "loopback address for the reverse proxy")
+	host := fs.String("host", "", "allowed public hostname, including its port if nonstandard")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 || *host == "" {
+		return errors.New("usage: flac_dl serve -host example.ts.net:10000 [-addr 127.0.0.1:8765]")
+	}
+	if !isLoopbackHost(*addr) {
+		return errors.New("serve must bind to a loopback address behind a reverse proxy")
+	}
+	u, err := url.Parse("https://" + *host)
+	if err != nil || u.Host != *host || u.Hostname() == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+		return errors.New("host must be a hostname with an optional port, not a URL")
+	}
+	return runPublicWeb(*addr, []string{*host})
 }
 
 func cmdSearch(args []string) error {

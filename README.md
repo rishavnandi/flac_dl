@@ -72,29 +72,45 @@ loopback address only.
 Run `go test -race ./...` for the Go tests and `bun test tests/web_app.test.js`
 for the browser-state and keyboard regression tests.
 
-## Vercel deployment
+## VPS deployment
 
 The public site supports charts, search, albums, playback and individual track
-downloads to the visitor's device. Downloads stream through the function and
+downloads to the visitor's device. Downloads stream through the server and
 are not saved on the server. Full album saving and lyric downloads remain
 features of the local app.
 
-`vercel.json` selects Vercel's Go runtime and builds with the `vercel` tag.
-That build excludes the terminal UI and native audio libraries. The normal
-`go build` command still includes the CLI, TUI and local web app.
-
-After signing in to the Vercel CLI:
+Build the web-only Linux binary for Loki's ARM64 architecture:
 
 ```sh
-vercel link --yes --project flac_dl
-vercel deploy --prod --yes
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags=server -trimpath -ldflags="-s -w" -o flac_dl .
 ```
 
-Vercel supplies the port and deployment hostnames. The hosted server accepts
-only those hostnames and does not start local background download jobs.
-API and CDN availability depends on the upstream services. A public deployment
-also consumes the owner's Vercel transfer and function allowance.
-The public repository is connected to Vercel for automatic deployments.
+The `server` build excludes the terminal UI and native audio libraries. A normal
+`go build` command still includes the CLI, TUI and local web app.
+Install the binary at `/opt/flac_dl/flac_dl`. The included
+[`deploy/flac_dl.service`](deploy/flac_dl.service) runs it as an unprivileged
+dynamic user, restarts it on failure and starts it on boot.
+
+The public-mode command does not open a browser or start disk download jobs:
+
+```sh
+./flac_dl serve -addr 127.0.0.1:8765 -host loki.mist-matrix.ts.net:10000
+```
+
+After approving Funnel in Tailscale, expose only the unused HTTPS port:
+
+```sh
+sudo tailscale funnel --bg --https=10000 --yes http://127.0.0.1:8765
+```
+
+The public address is `https://loki.mist-matrix.ts.net:10000`. Existing private
+Tailscale Serve routes on ports 443 and 8443 must not be converted to Funnel.
+For another host, change the allowed hostname in the command and service file.
+Keep the listener on loopback behind the HTTPS proxy.
+
+The app accepts only its configured public hostname. Audio playback goes directly
+to Kuwo's CDN. Browser downloads pass through Loki and count toward Funnel's
+bandwidth limit. API and CDN availability still depends on the upstream services.
 
 ## TUI controls
 

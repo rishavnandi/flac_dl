@@ -1,4 +1,4 @@
-//go:build !vercel
+//go:build !vercel && !server
 
 package main
 
