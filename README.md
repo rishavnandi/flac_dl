@@ -1,6 +1,6 @@
 # flac_dl
 
-[Live site](https://loki.mist-matrix.ts.net:10000) · [Source](https://github.com/rishavnandi/flac_dl)
+[Live site](https://flacdl.vercel.app) · [Source](https://github.com/rishavnandi/flac_dl)
 
 A Go music browser and downloader for [flac.music.hi.cn](https://flac.music.hi.cn).
 Browse Apple Music's US charts, search Kuwo, explore albums, stream tracks, and
