@@ -13,6 +13,9 @@
   let lyricsTrackID = "";
   let lyricsAbort;
   let lyricsRetryAt = 0;
+  const lyricsContent = document.querySelector("#lyrics-content");
+  let lyricLines = [];
+  let lyricIndex = -1;
 
   const tintArtwork = (image) => {
     const panel = image.closest(".feature-card, .album-hero, .player-dock");
@@ -87,9 +90,79 @@
       cover.dataset.trackId = item.id;
       cover.dataset.fallbackTried = "";
       cover.dataset.fallback = item.fallback || "";
-      cover.src = document.querySelector("#player-art").src.replace("/albumcover/120/", "/albumcover/500/");
+      const source = document.querySelector("#player-art").src;
+      cover.src = source;
+      const large = source.replace("/albumcover/120/", "/albumcover/500/");
+      if (large !== source) {
+        const upgrade = new Image();
+        upgrade.onload = () => {
+          if (currentTrack()?.id === item.id && cover.dataset.trackId === item.id) cover.src = large;
+        };
+        upgrade.src = large;
+      }
       cover.alt = `${item.name} cover`;
     }
+  };
+
+  const setLyricsMessage = (message) => {
+    lyricLines = [];
+    lyricIndex = -1;
+    lyricsContent.classList.remove("is-synced");
+    lyricsContent.textContent = message;
+  };
+
+  const paintLyrics = () => {
+    if (!fullscreen.open || !lyricLines.length) return;
+    let index = lyricLines.length - 1;
+    while (index >= 0 && lyricLines[index].time > audio.currentTime) index--;
+    if (index === lyricIndex) return;
+    const previous = lyricLines[lyricIndex]?.element;
+    previous?.classList.remove("is-active");
+    previous?.removeAttribute("aria-current");
+    lyricIndex = index;
+    const line = lyricLines[index]?.element;
+    if (!line) {
+      lyricsContent.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
+    line.classList.add("is-active");
+    line.setAttribute("aria-current", "true");
+    lyricsContent.scrollTo({
+      top: Math.max(0, line.offsetTop - lyricsContent.clientHeight / 2 + line.offsetHeight / 2),
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+  };
+
+  const showLyrics = (result) => {
+    setLyricsMessage("");
+    if (result.instrumental) {
+      setLyricsMessage("Instrumental · no lyrics.");
+      return;
+    }
+    const timed = [];
+    if (typeof result.syncedLyrics === "string") {
+      for (const line of result.syncedLyrics.split(/\r?\n/)) {
+        const timestamp = /\[(\d+):([0-5]?\d)(?:[.:](\d{1,3}))?\]/g;
+        const text = line.replace(timestamp, "").trim();
+        for (const match of line.matchAll(timestamp)) {
+          timed.push({ time: Number(match[1]) * 60 + Number(match[2]) + Number(`0.${match[3] || "0"}`), text });
+        }
+      }
+    }
+    timed.sort((a, b) => a.time - b.time);
+    if (!timed.length) {
+      setLyricsMessage((typeof result.plainLyrics === "string" && result.plainLyrics.trim()) || "No lyrics found for this track. Enjoy the music.");
+      return;
+    }
+    lyricsContent.classList.add("is-synced");
+    lyricLines = timed.map(line => {
+      const element = document.createElement("span");
+      element.className = "lyric-line";
+      element.textContent = line.text || "♪";
+      lyricsContent.append(element);
+      return { time: line.time, element };
+    });
+    paintLyrics();
   };
 
   const loadLyrics = async () => {
@@ -97,13 +170,13 @@
     if (!fullscreen.open || !item || lyricsTrackID === item.id) return;
     lyricsAbort?.abort();
     lyricsTrackID = item.id;
-    const content = document.querySelector("#lyrics-content");
-    content.scrollTop = 0;
+    lyricsContent.scrollTop = 0;
     if (Date.now() < lyricsRetryAt) {
-      content.textContent = "The lyrics service is busy. Please try again later.";
+      lyricsTrackID = "";
+      setLyricsMessage("The lyrics service is busy. Please try again later.");
       return;
     }
-    content.textContent = "Finding lyrics…";
+    setLyricsMessage("Finding lyrics…");
     const controller = lyricsAbort = new AbortController();
     const url = new URL("https://lrclib.net/api/get");
     url.searchParams.set("track_name", item.name);
@@ -118,25 +191,24 @@
       });
       if (controller.signal.aborted || audio.dataset.trackId !== item.id) return;
       if (response.status === 404) {
-        content.textContent = "No lyrics found for this track. Enjoy the music.";
+        setLyricsMessage("No lyrics found for this track. Enjoy the music.");
         return;
       }
       if (response.status === 429 || response.status === 503) {
         const delay = Math.max(1, Number(response.headers.get("Retry-After")) || 60);
         lyricsRetryAt = Date.now() + delay * 1000;
         lyricsTrackID = "";
-        content.textContent = "The lyrics service is busy. Please try again later.";
+        setLyricsMessage("The lyrics service is busy. Please try again later.");
         return;
       }
       if (!response.ok) throw new Error("Lyrics unavailable");
       const result = await response.json();
       if (controller.signal.aborted || audio.dataset.trackId !== item.id) return;
-      content.textContent = result.instrumental ? "Instrumental · no lyrics." :
-        (typeof result.plainLyrics === "string" && result.plainLyrics.trim()) || "No lyrics found for this track. Enjoy the music.";
+      showLyrics(result);
     } catch {
       if (!controller.signal.aborted && audio.dataset.trackId === item.id) {
         lyricsTrackID = "";
-        content.textContent = "Lyrics are unavailable right now. Playback is unaffected.";
+        setLyricsMessage("Lyrics are unavailable right now. Playback is unaffected.");
       }
     }
   };
@@ -146,6 +218,7 @@
     if (audio.dataset.trackId !== item.id) {
       lyricsAbort?.abort();
       lyricsTrackID = "";
+      setLyricsMessage("Lyrics appear here when available.");
     }
     document.querySelector("#player-title").textContent = item.name || "Unknown track";
     document.querySelector("#player-artist").textContent = item.artist || "Kuwo";
@@ -244,6 +317,7 @@
       paintFullscreen();
       fullscreen.showModal();
       loadLyrics();
+      paintLyrics();
     } else if (action === "close-player") {
       fullscreen.close();
     }
@@ -305,10 +379,12 @@
         range.value = String(Math.round(audio.currentTime / audio.duration * Number(range.max)));
       }
     });
+    paintLyrics();
   });
   seeks.forEach(range => range.addEventListener("input", () => {
     if (Number.isFinite(audio.duration) && audio.duration > 0) {
       audio.currentTime = Number(range.value) / Number(range.max) * audio.duration;
+      paintLyrics();
     }
   }));
   volume.addEventListener("input", () => {

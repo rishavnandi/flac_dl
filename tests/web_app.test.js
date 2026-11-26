@@ -5,8 +5,14 @@ import { runInNewContext } from "node:vm";
 const source = readFileSync(new URL("../web/static/app.js", import.meta.url), "utf8");
 
 function app(saved = {}, options = {}) {
-  const element = () => ({
-    listeners: {}, dataset: {}, value: "0.8", textContent: "", attributes: {},
+  const element = () => {
+    const item = {
+    listeners: {}, dataset: {}, value: "0.8", attributes: {}, children: [], _text: "",
+    get textContent() { return this._text + this.children.map(child => child.textContent).join(""); },
+    set textContent(value) { this._text = String(value); this.children = []; },
+    append(child) { child.offsetTop = this.children.length * 40; this.children.push(child); },
+    offsetHeight: 40, clientHeight: 100,
+    scrollTo(options) { this.scrollTop = options.top; },
     classes: new Set(),
     style: {
       values: new Map(),
@@ -24,17 +30,18 @@ function app(saved = {}, options = {}) {
     select() { this.selected = true; },
     showModal() { this.open = true; },
     close() { this.open = false; },
-  });
+    };
+    item.classList = {
+      add: name => item.classes.add(name),
+      remove: name => item.classes.delete(name),
+      toggle: (name, active) => active ? item.classes.add(name) : item.classes.delete(name),
+    };
+    return item;
+  };
   const nodes = new Map();
   const node = selector => {
     if (!nodes.has(selector)) {
-      const item = element();
-      item.classList = {
-        add: name => item.classes.add(name),
-        remove: name => item.classes.delete(name),
-        toggle: (name, active) => active ? item.classes.add(name) : item.classes.delete(name),
-      };
-      nodes.set(selector, item);
+      nodes.set(selector, element());
     }
     return nodes.get(selector);
   };
@@ -56,18 +63,20 @@ function app(saved = {}, options = {}) {
   const document = {
     ...element(), body: element(),
     querySelector: node,
+    createElement: element,
     querySelectorAll: selector => selector === "#view .play-track" ? [track] : selector === ".primary-nav a" ? nav : [],
   };
   const storage = new Map(Object.entries(saved));
   const location = { href: "http://localhost/search?q=tron" };
-  const Image = class {};
+  const imageRequests = [];
+  const Image = class { constructor() { imageRequests.push(this); } };
   runInNewContext(source, {
     document, location, URL, history: {},
     AbortController, AbortSignal,
     fetch: options.fetch,
-    HTMLImageElement: Image,
+    HTMLImageElement: Image, Image,
     localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) },
-    window: { clearTimeout() {}, setTimeout() {} },
+    window: { clearTimeout() {}, setTimeout() {}, matchMedia: () => ({ matches: true }) },
   });
   const click = action => document.emit("click", {
     target: {
@@ -76,7 +85,7 @@ function app(saved = {}, options = {}) {
     },
     preventDefault() {},
   });
-  return { document, node, audio, storage, location, track, nav, Image, click };
+  return { document, node, audio, storage, location, track, nav, Image, click, imageRequests };
 }
 
 test("volume persists, validates saved values, and accepts mute", () => {
@@ -179,7 +188,7 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
 
 test("full-screen player shares playback, seeks and loads lyrics only on demand", async () => {
   const requests = [];
-  const { click, node, audio, track } = app({}, {
+  const { click, node, audio, track, imageRequests } = app({}, {
     fetch: async (url, init) => {
       requests.push({ url, init });
       return { ok: true, json: async () => ({ plainLyrics: "<b>Lyrics are text, not HTML</b>" }) };
@@ -194,6 +203,9 @@ test("full-screen player shares playback, seeks and loads lyrics only on demand"
   await settle();
   expect(node("#fullscreen-player").open).toBe(true);
   expect(node("#fullscreen-title").textContent).toBe("Test Song");
+  expect(node("#fullscreen-artwork").src).toBe("https://img1.kuwo.cn/star/albumcover/120/test.jpg");
+  expect(imageRequests[0].src).toBe("https://img1.kuwo.cn/star/albumcover/500/test.jpg");
+  imageRequests[0].onload();
   expect(node("#fullscreen-artwork").src).toBe("https://img1.kuwo.cn/star/albumcover/500/test.jpg");
   expect(node("#lyrics-content").textContent).toBe("<b>Lyrics are text, not HTML</b>");
   expect(requests[0].url.searchParams.get("track_name")).toBe("Test Song");
@@ -256,4 +268,80 @@ test("missing lyrics and rate limits do not interrupt music or trigger retries",
     expect(calls).toBe(1);
     expect(audio.paused).toBe(false);
   }
+});
+
+test("pending or failed large artwork keeps the thumbnail and stale upgrades are ignored", () => {
+  const { click, track, node, imageRequests } = app();
+  track.dataset.art = "https://img1.kuwo.cn/star/albumcover/120/first.jpg";
+  click("play");
+  expect(node("#fullscreen-artwork").src).toBe(track.dataset.art);
+  expect(imageRequests[0].src).toContain("/500/first.jpg");
+  track.dataset = { id: "43", name: "Next song", art: "https://img1.kuwo.cn/star/albumcover/120/second.jpg" };
+  click("play");
+  imageRequests[0].onload();
+  expect(node("#fullscreen-artwork").src).toBe(track.dataset.art);
+  imageRequests[1].onload();
+  expect(node("#fullscreen-artwork").src).toContain("/500/second.jpg");
+});
+
+test("timestamped lyrics sort, highlight, follow playback and update when seeking backward", async () => {
+  const { click, node, audio } = app({}, {
+    fetch: async () => ({
+      ok: true,
+      json: async () => ({
+        plainLyrics: "Plain fallback",
+        syncedLyrics: "[ar:Test Artist]\n[00:10.25]Second line\n[00:01]Intro\n[00:05.5][00:20:50]Repeated <b>text</b>\n[00:25.123]",
+      }),
+    }),
+  });
+  audio.duration = 100;
+  audio.currentTime = 0;
+  click("play");
+  click("expand-player");
+  await settle();
+  const content = node("#lyrics-content");
+  expect(content.classes.has("is-synced")).toBe(true);
+  expect(content.children.map(line => line.textContent)).toEqual(["Intro", "Repeated <b>text</b>", "Second line", "Repeated <b>text</b>", "♪"]);
+  expect(content.children.some(line => line.classes.has("is-active"))).toBe(false);
+  audio.currentTime = 5.49;
+  audio.emit("timeupdate");
+  expect(content.children[0].attributes["aria-current"]).toBe("true");
+  audio.currentTime = 5.5;
+  audio.emit("timeupdate");
+  expect(content.children[1].attributes["aria-current"]).toBe("true");
+  expect(content.children[0].attributes["aria-current"]).toBeUndefined();
+  audio.currentTime = 11;
+  audio.emit("timeupdate");
+  expect(content.children[2].classes.has("is-active")).toBe(true);
+  expect(content.scrollTop).toBe(50);
+  click("close-player");
+  audio.currentTime = 26;
+  audio.emit("timeupdate");
+  expect(content.children[2].classes.has("is-active")).toBe(true);
+  click("expand-player");
+  expect(content.children[4].classes.has("is-active")).toBe(true);
+  node("#fullscreen-seek").value = "10";
+  node("#fullscreen-seek").emit("input");
+  expect(audio.currentTime).toBe(1);
+  expect(content.children[0].classes.has("is-active")).toBe(true);
+  expect(content.children[4].attributes["aria-current"]).toBeUndefined();
+  expect(content.scrollTop).toBe(0);
+  node("#fullscreen-seek").value = "0";
+  node("#fullscreen-seek").emit("input");
+  expect(content.children.some(line => line.classes.has("is-active"))).toBe(false);
+  expect(content.scrollTop).toBe(0);
+});
+
+test("invalid synced lyrics retain the plain-text fallback", async () => {
+  const { click, node } = app({}, {
+    fetch: async () => ({
+      ok: true,
+      json: async () => ({ syncedLyrics: "[ar:Artist]\n[00:99]Invalid time", plainLyrics: "Plain lyrics" }),
+    }),
+  });
+  click("play");
+  click("expand-player");
+  await settle();
+  expect(node("#lyrics-content").classes.has("is-synced")).toBe(false);
+  expect(node("#lyrics-content").textContent).toBe("Plain lyrics");
 });
